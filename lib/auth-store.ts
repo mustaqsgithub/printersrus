@@ -9,6 +9,7 @@ export interface AuthUser {
   phone?: string;
   role: string;
   emailVerified: boolean;
+  emailNotifications: boolean;
   dateJoined: string;
 }
 

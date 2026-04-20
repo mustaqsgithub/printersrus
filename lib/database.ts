@@ -141,6 +141,7 @@ export async function initDatabase() {
     // Backfill columns if users table existed before (safe no-op via try/catch)
     try { db.exec(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'customer'`); } catch {}
     try { db.exec(`ALTER TABLE users ADD COLUMN email_verified_at TEXT`); } catch {}
+    try { db.exec(`ALTER TABLE users ADD COLUMN email_notifications INTEGER DEFAULT 1`); } catch {}
 
     // Carts table
     db.exec(`
@@ -186,6 +187,21 @@ export async function initDatabase() {
         created_at TEXT DEFAULT (datetime('now')),
         FOREIGN KEY (order_id) REFERENCES orders(id),
         FOREIGN KEY (product_id) REFERENCES products(id)
+      )
+    `);
+
+    // Notifications table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id TEXT PRIMARY KEY,
+        user_email TEXT NOT NULL,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        order_id TEXT,
+        read INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (order_id) REFERENCES orders(id)
       )
     `);
 
@@ -380,6 +396,22 @@ export const dbHelpers = {
     return db.prepare(`SELECT * FROM orders ORDER BY created_at DESC`).all();
   },
 
+  getOrdersByEmail: async (email: string) => {
+    const db = getDb();
+    const orders = db.prepare(
+      `SELECT * FROM orders WHERE customer_email = ? ORDER BY created_at DESC`
+    ).all(email) as any[];
+
+    // Attach item count to each order
+    const countStmt = db.prepare(
+      `SELECT COALESCE(SUM(quantity), 0) as item_count FROM order_items WHERE order_id = ?`
+    );
+    return orders.map((order) => {
+      const row = countStmt.get(order.id) as any;
+      return { ...order, item_count: row?.item_count ?? 0 };
+    });
+  },
+
   updateOrder: async (id: string, updates: any) => {
     const db = getDb();
     const fields: string[] = [];
@@ -486,6 +518,65 @@ export const dbHelpers = {
 
     db.prepare(`UPDATE carts SET updated_at = datetime('now') WHERE id = ?`).run(cartId);
     return dbHelpers.getCartItemsForUser(userId);
+  },
+
+  // Notifications
+  createNotification: async (notification: {
+    userEmail: string;
+    type: string;
+    title: string;
+    message: string;
+    orderId?: string;
+  }) => {
+    const db = getDb();
+    // Only create if user has email_notifications enabled
+    const user = db.prepare(
+      `SELECT email_notifications FROM users WHERE LOWER(email) = ?`
+    ).get(notification.userEmail.toLowerCase()) as any;
+    if (user && !user.email_notifications) return null;
+
+    const id = crypto.randomUUID();
+    db.prepare(`
+      INSERT INTO notifications (id, user_email, type, title, message, order_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      notification.userEmail.toLowerCase(),
+      notification.type,
+      notification.title,
+      notification.message,
+      notification.orderId || null
+    );
+    return id;
+  },
+
+  getNotificationsByEmail: async (email: string) => {
+    const db = getDb();
+    return db.prepare(
+      `SELECT * FROM notifications WHERE user_email = ? ORDER BY created_at DESC LIMIT 50`
+    ).all(email.toLowerCase());
+  },
+
+  getUnreadNotificationCount: async (email: string) => {
+    const db = getDb();
+    const row = db.prepare(
+      `SELECT COUNT(*) as count FROM notifications WHERE user_email = ? AND read = 0`
+    ).get(email.toLowerCase()) as any;
+    return row?.count ?? 0;
+  },
+
+  markNotificationRead: async (id: string, email: string) => {
+    const db = getDb();
+    db.prepare(
+      `UPDATE notifications SET read = 1 WHERE id = ? AND user_email = ?`
+    ).run(id, email.toLowerCase());
+  },
+
+  markAllNotificationsRead: async (email: string) => {
+    const db = getDb();
+    db.prepare(
+      `UPDATE notifications SET read = 1 WHERE user_email = ? AND read = 0`
+    ).run(email.toLowerCase());
   },
 };
 

@@ -12,6 +12,7 @@ export interface DbUser {
   phone: string | null;
   role: string;
   email_verified_at: Date | null;
+  email_notifications: number;
   created_at: Date;
 }
 
@@ -27,6 +28,7 @@ export const toAuthUser = (user: DbUser) => ({
   phone: user.phone || undefined,
   role: user.role,
   emailVerified: Boolean(user.email_verified_at),
+  emailNotifications: Boolean(user.email_notifications ?? 1),
   dateJoined: new Date(user.created_at).toISOString(),
 });
 
@@ -66,7 +68,7 @@ export const createUser = async (input: {
   `).run(id, input.firstName, input.lastName, normalizedEmail, input.phone || null, passwordHash);
 
   return db.prepare(`
-    SELECT id, first_name, last_name, email, phone, role, email_verified_at, created_at
+    SELECT id, first_name, last_name, email, phone, role, email_verified_at, email_notifications, created_at
     FROM users WHERE id = ?
   `).get(id) as DbUser;
 };
@@ -75,7 +77,7 @@ export const getUserByEmail = async (email: string) => {
   const db = getDb();
   const normalizedEmail = email.trim().toLowerCase();
   return (db.prepare(`
-    SELECT id, first_name, last_name, email, phone, role, email_verified_at, password_hash, created_at
+    SELECT id, first_name, last_name, email, phone, role, email_verified_at, email_notifications, password_hash, created_at
     FROM users WHERE LOWER(email) = ?
   `).get(normalizedEmail) as DbUserWithPassword) || null;
 };
@@ -83,7 +85,7 @@ export const getUserByEmail = async (email: string) => {
 export const getUserById = async (id: string) => {
   const db = getDb();
   return (db.prepare(`
-    SELECT id, first_name, last_name, email, phone, role, email_verified_at, created_at
+    SELECT id, first_name, last_name, email, phone, role, email_verified_at, email_notifications, created_at
     FROM users WHERE id = ?
   `).get(id) as DbUser) || null;
 };
@@ -91,7 +93,7 @@ export const getUserById = async (id: string) => {
 export const listUsers = async () => {
   const db = getDb();
   return db.prepare(`
-    SELECT id, first_name, last_name, email, phone, role, email_verified_at, created_at
+    SELECT id, first_name, last_name, email, phone, role, email_verified_at, email_notifications, created_at
     FROM users ORDER BY created_at DESC
   `).all() as DbUser[];
 };
@@ -144,7 +146,7 @@ export const updateUser = async (
   db.prepare(`UPDATE users SET ${fields.join(", ")}, updated_at = datetime('now') WHERE id = ?`).run(...values);
 
   return db.prepare(`
-    SELECT id, first_name, last_name, email, phone, role, email_verified_at, created_at
+    SELECT id, first_name, last_name, email, phone, role, email_verified_at, email_notifications, created_at
     FROM users WHERE id = ?
   `).get(id) as DbUser;
 };
@@ -168,7 +170,7 @@ export const getSessionUser = async (token: string) => {
   const db = getDb();
   const tokenHash = hashSessionToken(token);
   return (db.prepare(`
-    SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.role, u.email_verified_at, u.created_at
+    SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.role, u.email_verified_at, u.email_notifications, u.created_at
     FROM sessions s
     JOIN users u ON s.user_id = u.id
     WHERE s.token_hash = ?
@@ -279,7 +281,7 @@ export const createAdminUser = async (input: {
   `).run(id, input.firstName, input.lastName, normalizedEmail, input.phone || null, passwordHash, now);
 
   return db.prepare(`
-    SELECT id, first_name, last_name, email, phone, role, email_verified_at, created_at
+    SELECT id, first_name, last_name, email, phone, role, email_verified_at, email_notifications, created_at
     FROM users WHERE id = ?
   `).get(id) as DbUser;
 };
@@ -306,7 +308,7 @@ export const updateUserPasswordAndRole = async (input: {
   `).run(passwordHash, role, emailVerifiedAt, normalizedEmail);
 
   return (db.prepare(`
-    SELECT id, first_name, last_name, email, phone, role, email_verified_at, created_at
+    SELECT id, first_name, last_name, email, phone, role, email_verified_at, email_notifications, created_at
     FROM users WHERE LOWER(email) = ?
   `).get(normalizedEmail) as DbUser) || null;
 };
@@ -333,7 +335,7 @@ export const createUserWithRole = async (input: {
   `).run(id, input.firstName, input.lastName, normalizedEmail, input.phone || null, passwordHash, role, emailVerifiedAt);
 
   return db.prepare(`
-    SELECT id, first_name, last_name, email, phone, role, email_verified_at, created_at
+    SELECT id, first_name, last_name, email, phone, role, email_verified_at, email_notifications, created_at
     FROM users WHERE id = ?
   `).get(id) as DbUser;
 };
@@ -345,7 +347,7 @@ export const updateUserRole = async (id: string, role: string) => {
   `).run(role, id);
 
   return (db.prepare(`
-    SELECT id, first_name, last_name, email, phone, role, email_verified_at, created_at
+    SELECT id, first_name, last_name, email, phone, role, email_verified_at, email_notifications, created_at
     FROM users WHERE id = ?
   `).get(id) as DbUser) || null;
 };
@@ -358,7 +360,7 @@ export const updateUserPasswordById = async (id: string, password: string) => {
   `).run(passwordHash, id);
 
   return (db.prepare(`
-    SELECT id, first_name, last_name, email, phone, role, email_verified_at, created_at
+    SELECT id, first_name, last_name, email, phone, role, email_verified_at, email_notifications, created_at
     FROM users WHERE id = ?
   `).get(id) as DbUser) || null;
 };
