@@ -1,13 +1,14 @@
-// Vercel Postgres database setup
-// Note: Make sure POSTGRES_URL environment variable is set before using this module
-import { sql } from "@vercel/postgres";
+// SQLite database setup using better-sqlite3
+import { getDb } from "./db";
 import crypto from "crypto";
 
 // Initialize database schema
 export async function initDatabase() {
   try {
+    const db = getDb();
+
     // Categories table
-    await sql`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS categories (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -15,13 +16,13 @@ export async function initDatabase() {
         description TEXT,
         image TEXT,
         parent_id TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
       )
-    `;
+    `);
 
     // Products table
-    await sql`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS products (
         id TEXT PRIMARY KEY,
         sku TEXT UNIQUE NOT NULL,
@@ -48,14 +49,14 @@ export async function initDatabase() {
         featured INTEGER DEFAULT 0,
         on_sale INTEGER DEFAULT 0,
         is_active INTEGER DEFAULT 1,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
         FOREIGN KEY (category_id) REFERENCES categories(id)
       )
-    `;
+    `);
 
     // Orders table
-    await sql`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS orders (
         id TEXT PRIMARY KEY,
         order_number TEXT UNIQUE NOT NULL,
@@ -74,19 +75,19 @@ export async function initDatabase() {
         total_amount REAL NOT NULL,
         shipping_method TEXT,
         tracking_number TEXT,
-        shipped_at TIMESTAMP,
-        delivered_at TIMESTAMP,
+        shipped_at TEXT,
+        delivered_at TEXT,
         payment_intent_id TEXT,
-        paid_at TIMESTAMP,
+        paid_at TEXT,
         customer_notes TEXT,
         admin_notes TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
       )
-    `;
+    `);
 
     // Users table
-    await sql`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         first_name TEXT NOT NULL,
@@ -95,82 +96,82 @@ export async function initDatabase() {
         phone TEXT,
         password_hash TEXT NOT NULL,
         role TEXT DEFAULT 'customer',
-        email_verified_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        email_verified_at TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
       )
-    `;
+    `);
 
     // Sessions table
-    await sql`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS sessions (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         token_hash TEXT UNIQUE NOT NULL,
-        expires_at TIMESTAMP NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
         FOREIGN KEY (user_id) REFERENCES users(id)
       )
-    `;
+    `);
 
     // Email verification tokens table
-    await sql`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS email_verification_tokens (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         token_hash TEXT UNIQUE NOT NULL,
-        expires_at TIMESTAMP NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
         FOREIGN KEY (user_id) REFERENCES users(id)
       )
-    `;
+    `);
 
     // Password reset tokens table
-    await sql`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS password_reset_tokens (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         token_hash TEXT UNIQUE NOT NULL,
-        expires_at TIMESTAMP NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
         FOREIGN KEY (user_id) REFERENCES users(id)
       )
-    `;
+    `);
 
-    // Backfill columns if users table existed before
-    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'customer'`;
-    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP`;
+    // Backfill columns if users table existed before (safe no-op via try/catch)
+    try { db.exec(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'customer'`); } catch {}
+    try { db.exec(`ALTER TABLE users ADD COLUMN email_verified_at TEXT`); } catch {}
 
     // Carts table
-    await sql`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS carts (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         status TEXT DEFAULT 'active',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
         FOREIGN KEY (user_id) REFERENCES users(id)
       )
-    `;
+    `);
 
     // Cart items table
-    await sql`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS cart_items (
         id TEXT PRIMARY KEY,
         cart_id TEXT NOT NULL,
         product_id TEXT NOT NULL,
         variant_id TEXT DEFAULT '',
         quantity INTEGER NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
         FOREIGN KEY (cart_id) REFERENCES carts(id),
         FOREIGN KEY (product_id) REFERENCES products(id),
         UNIQUE (cart_id, product_id, variant_id)
       )
-    `;
+    `);
 
     // Order items table
-    await sql`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS order_items (
         id TEXT PRIMARY KEY,
         order_id TEXT NOT NULL,
@@ -182,13 +183,13 @@ export async function initDatabase() {
         quantity INTEGER NOT NULL,
         price REAL NOT NULL,
         total_price REAL NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TEXT DEFAULT (datetime('now')),
         FOREIGN KEY (order_id) REFERENCES orders(id),
         FOREIGN KEY (product_id) REFERENCES products(id)
       )
-    `;
+    `);
 
-    console.log('✅ Database initialized successfully!');
+    console.log('Database initialized successfully!');
   } catch (error) {
     console.error('Error initializing database:', error);
     throw error;
@@ -199,354 +200,291 @@ export async function initDatabase() {
 export const dbHelpers = {
   // Categories
   getAllCategories: async () => {
-    const result = await sql`SELECT * FROM categories ORDER BY name`;
-    return result.rows;
+    const db = getDb();
+    return db.prepare(`SELECT * FROM categories ORDER BY name`).all();
   },
 
   getCategoryBySlug: async (slug: string) => {
-    const result = await sql`SELECT * FROM categories WHERE slug = ${slug}`;
-    return result.rows[0] || null;
+    const db = getDb();
+    return db.prepare(`SELECT * FROM categories WHERE slug = ?`).get(slug) || null;
   },
 
   // Products
   getAllProducts: async (filters?: { category?: string; sale?: boolean; search?: string }) => {
-    let result;
-    
-    if (filters?.category && filters?.sale && filters?.search) {
-      const searchTerm = `%${filters.search}%`;
-      result = await sql`
-        SELECT * FROM products 
-        WHERE is_active = 1 
-        AND category_id IN (SELECT id FROM categories WHERE slug = ${filters.category})
-        AND on_sale = 1
-        AND (name ILIKE ${searchTerm} OR description ILIKE ${searchTerm} OR brand ILIKE ${searchTerm})
-        ORDER BY featured DESC, created_at DESC
-      `;
-    } else if (filters?.category && filters?.sale) {
-      result = await sql`
-        SELECT * FROM products 
-        WHERE is_active = 1 
-        AND category_id IN (SELECT id FROM categories WHERE slug = ${filters.category})
-        AND on_sale = 1
-        ORDER BY featured DESC, created_at DESC
-      `;
-    } else if (filters?.category && filters?.search) {
-      const searchTerm = `%${filters.search}%`;
-      result = await sql`
-        SELECT * FROM products 
-        WHERE is_active = 1 
-        AND category_id IN (SELECT id FROM categories WHERE slug = ${filters.category})
-        AND (name ILIKE ${searchTerm} OR description ILIKE ${searchTerm} OR brand ILIKE ${searchTerm})
-        ORDER BY featured DESC, created_at DESC
-      `;
-    } else if (filters?.sale && filters?.search) {
-      const searchTerm = `%${filters.search}%`;
-      result = await sql`
-        SELECT * FROM products 
-        WHERE is_active = 1 
-        AND on_sale = 1
-        AND (name ILIKE ${searchTerm} OR description ILIKE ${searchTerm} OR brand ILIKE ${searchTerm})
-        ORDER BY featured DESC, created_at DESC
-      `;
-    } else if (filters?.category) {
-      result = await sql`
-        SELECT * FROM products 
-        WHERE is_active = 1 
-        AND category_id IN (SELECT id FROM categories WHERE slug = ${filters.category})
-        ORDER BY featured DESC, created_at DESC
-      `;
-    } else if (filters?.sale) {
-      result = await sql`
-        SELECT * FROM products 
-        WHERE is_active = 1 
-        AND on_sale = 1
-        ORDER BY featured DESC, created_at DESC
-      `;
-    } else if (filters?.search) {
-      const searchTerm = `%${filters.search}%`;
-      result = await sql`
-        SELECT * FROM products 
-        WHERE is_active = 1 
-        AND (name ILIKE ${searchTerm} OR description ILIKE ${searchTerm} OR brand ILIKE ${searchTerm})
-        ORDER BY featured DESC, created_at DESC
-      `;
-    } else {
-      result = await sql`
-        SELECT * FROM products 
-        WHERE is_active = 1 
-        ORDER BY featured DESC, created_at DESC
-      `;
+    const db = getDb();
+    const conditions: string[] = ["is_active = 1"];
+    const params: any[] = [];
+
+    if (filters?.category) {
+      conditions.push("category_id IN (SELECT id FROM categories WHERE slug = ?)");
+      params.push(filters.category);
     }
-    
-    return result.rows;
+    if (filters?.sale) {
+      conditions.push("on_sale = 1");
+    }
+    if (filters?.search) {
+      const searchTerm = `%${filters.search}%`;
+      conditions.push("(name LIKE ? COLLATE NOCASE OR description LIKE ? COLLATE NOCASE OR brand LIKE ? COLLATE NOCASE)");
+      params.push(searchTerm, searchTerm, searchTerm);
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    return db.prepare(`SELECT * FROM products ${where} ORDER BY featured DESC, created_at DESC`).all(...params);
   },
 
   getAllProductsAdmin: async () => {
-    const result = await sql`SELECT * FROM products ORDER BY created_at DESC`;
-    return result.rows;
+    const db = getDb();
+    return db.prepare(`SELECT * FROM products ORDER BY created_at DESC`).all();
   },
 
   getProductById: async (id: string) => {
-    const result = await sql`SELECT * FROM products WHERE id = ${id}`;
-    return result.rows[0] || null;
+    const db = getDb();
+    return db.prepare(`SELECT * FROM products WHERE id = ?`).get(id) || null;
   },
 
   getProductBySlug: async (slug: string) => {
-    const result = await sql`SELECT * FROM products WHERE slug = ${slug}`;
-    return result.rows[0] || null;
+    const db = getDb();
+    return db.prepare(`SELECT * FROM products WHERE slug = ?`).get(slug) || null;
   },
 
   getFeaturedProducts: async (limit = 8) => {
-    const result = await sql`
-      SELECT * FROM products 
-      WHERE featured = 1 AND is_active = 1 
-      ORDER BY created_at DESC 
-      LIMIT ${limit}
-    `;
-    return result.rows;
+    const db = getDb();
+    return db
+      .prepare(`SELECT * FROM products WHERE featured = 1 AND is_active = 1 ORDER BY created_at DESC LIMIT ?`)
+      .all(limit);
   },
 
   // Insert product
   insertProduct: async (product: any) => {
-    const result = await sql`
+    const db = getDb();
+    db.prepare(`
       INSERT INTO products (
         id, sku, name, slug, description, long_description, price, sale_price,
         main_image, images, brand, category_id, in_stock, stock_quantity,
         featured, on_sale, is_active
       ) VALUES (
-        ${product.id},
-        ${product.sku},
-        ${product.name},
-        ${product.slug},
-        ${product.description},
-        ${product.longDescription || null},
-        ${product.price},
-        ${product.salePrice || null},
-        ${product.mainImage},
-        ${product.images || null},
-        ${product.brand || null},
-        ${product.categoryId},
-        ${product.inStock ? 1 : 0},
-        ${product.stockQuantity},
-        ${product.featured ? 1 : 0},
-        ${product.onSale ? 1 : 0},
-        ${product.isActive ? 1 : 0}
+        ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?,
+        ?, ?, ?
       )
-    `;
-    return result;
+    `).run(
+      product.id,
+      product.sku,
+      product.name,
+      product.slug,
+      product.description,
+      product.longDescription || null,
+      product.price,
+      product.salePrice || null,
+      product.mainImage,
+      product.images || null,
+      product.brand || null,
+      product.categoryId,
+      product.inStock ? 1 : 0,
+      product.stockQuantity,
+      product.featured ? 1 : 0,
+      product.onSale ? 1 : 0,
+      product.isActive ? 1 : 0
+    );
   },
 
   // Insert category
   insertCategory: async (category: any) => {
-    const result = await sql`
+    const db = getDb();
+    db.prepare(`
       INSERT INTO categories (id, name, slug, description, image, parent_id)
-      VALUES (
-        ${category.id},
-        ${category.name},
-        ${category.slug},
-        ${category.description || null},
-        ${category.image || null},
-        ${category.parentId || null}
-      )
-    `;
-    return result;
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      category.id,
+      category.name,
+      category.slug,
+      category.description || null,
+      category.image || null,
+      category.parentId || null
+    );
   },
 
   updateCategory: async (id: string, updates: any) => {
+    const db = getDb();
     const fields: string[] = [];
     const values: any[] = [];
-    let paramIndex = 1;
 
     for (const [key, value] of Object.entries(updates)) {
-      fields.push(`${key} = $${paramIndex}`);
+      fields.push(`${key} = ?`);
       values.push(value);
-      paramIndex++;
     }
 
     const setClause = fields.join(", ");
     values.push(id);
 
-    const query = `UPDATE categories SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramIndex}`;
-    const result = await sql.query(query, values);
-    return result;
+    db.prepare(`UPDATE categories SET ${setClause}, updated_at = datetime('now') WHERE id = ?`).run(...values);
   },
 
   deleteCategory: async (id: string) => {
-    const result = await sql`DELETE FROM categories WHERE id = ${id}`;
-    return result;
+    const db = getDb();
+    db.prepare(`DELETE FROM categories WHERE id = ?`).run(id);
   },
 
   // Update product
   updateProduct: async (id: string, updates: any) => {
+    const db = getDb();
     const fields: string[] = [];
     const values: any[] = [];
-    let paramIndex = 1;
-    
-    for (const [key, value] of Object.entries(updates)) {
-      fields.push(`${key} = $${paramIndex}`);
-      values.push(value);
-      paramIndex++;
-    }
-    
-    const setClause = fields.join(', ');
-    values.push(id);
-    
-    const query = `UPDATE products SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramIndex}`;
-    const result = await sql.query(query, values);
-    return result;
-  },
-
-  // Delete product
-  deleteProduct: async (id: string) => {
-    const result = await sql`DELETE FROM products WHERE id = ${id}`;
-    return result;
-  },
-
-  // Orders
-  createOrder: async (order: any) => {
-    const result = await sql`
-      INSERT INTO orders (
-        id, order_number, customer_email, customer_name, customer_phone,
-        shipping_address, billing_address, subtotal, tax_amount,
-        shipping_amount, discount_amount, total_amount, status, payment_status
-      ) VALUES (
-        ${order.id},
-        ${order.orderNumber},
-        ${order.customerEmail},
-        ${order.customerName},
-        ${order.customerPhone || null},
-        ${order.shippingAddress},
-        ${order.billingAddress},
-        ${order.subtotal},
-        ${order.taxAmount},
-        ${order.shippingAmount},
-        ${order.discountAmount || 0},
-        ${order.totalAmount},
-        ${order.status || 'pending'},
-        ${order.paymentStatus || 'pending'}
-      )
-    `;
-    return result;
-  },
-
-  getAllOrders: async () => {
-    const result = await sql`SELECT * FROM orders ORDER BY created_at DESC`;
-    return result.rows;
-  },
-
-  updateOrder: async (id: string, updates: any) => {
-    const fields: string[] = [];
-    const values: any[] = [];
-    let paramIndex = 1;
 
     for (const [key, value] of Object.entries(updates)) {
-      fields.push(`${key} = $${paramIndex}`);
+      fields.push(`${key} = ?`);
       values.push(value);
-      paramIndex++;
     }
 
     const setClause = fields.join(", ");
     values.push(id);
 
-    const query = `UPDATE orders SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramIndex}`;
-    const result = await sql.query(query, values);
-    return result;
+    db.prepare(`UPDATE products SET ${setClause}, updated_at = datetime('now') WHERE id = ?`).run(...values);
+  },
+
+  // Delete product
+  deleteProduct: async (id: string) => {
+    const db = getDb();
+    db.prepare(`DELETE FROM products WHERE id = ?`).run(id);
+  },
+
+  // Orders
+  createOrder: async (order: any) => {
+    const db = getDb();
+    db.prepare(`
+      INSERT INTO orders (
+        id, order_number, customer_email, customer_name, customer_phone,
+        shipping_address, billing_address, subtotal, tax_amount,
+        shipping_amount, discount_amount, total_amount, status, payment_status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      order.id,
+      order.orderNumber,
+      order.customerEmail,
+      order.customerName,
+      order.customerPhone || null,
+      order.shippingAddress,
+      order.billingAddress,
+      order.subtotal,
+      order.taxAmount,
+      order.shippingAmount,
+      order.discountAmount || 0,
+      order.totalAmount,
+      order.status || "pending",
+      order.paymentStatus || "pending"
+    );
+  },
+
+  getAllOrders: async () => {
+    const db = getDb();
+    return db.prepare(`SELECT * FROM orders ORDER BY created_at DESC`).all();
+  },
+
+  updateOrder: async (id: string, updates: any) => {
+    const db = getDb();
+    const fields: string[] = [];
+    const values: any[] = [];
+
+    for (const [key, value] of Object.entries(updates)) {
+      fields.push(`${key} = ?`);
+      values.push(value);
+    }
+
+    const setClause = fields.join(", ");
+    values.push(id);
+
+    db.prepare(`UPDATE orders SET ${setClause}, updated_at = datetime('now') WHERE id = ?`).run(...values);
   },
 
   // Get order by ID
   getOrderById: async (id: string) => {
-    const orderResult = await sql`SELECT * FROM orders WHERE id = ${id}`;
-    const order = orderResult.rows[0];
-    
+    const db = getDb();
+    const order = db.prepare(`SELECT * FROM orders WHERE id = ?`).get(id) as any;
+
     if (order) {
-      const itemsResult = await sql`SELECT * FROM order_items WHERE order_id = ${id}`;
-      return { ...order, items: itemsResult.rows };
+      const items = db.prepare(`SELECT * FROM order_items WHERE order_id = ?`).all(id);
+      return { ...order, items };
     }
     return null;
   },
 
   // Cart helpers
   getOrCreateCartId: async (userId: string) => {
-    const existing = await sql`
-      SELECT id FROM carts WHERE user_id = ${userId} AND status = 'active' LIMIT 1
-    `;
-    if (existing.rows[0]) {
-      return existing.rows[0].id as string;
+    const db = getDb();
+    const existing = db.prepare(
+      `SELECT id FROM carts WHERE user_id = ? AND status = 'active' LIMIT 1`
+    ).get(userId) as any;
+
+    if (existing) {
+      return existing.id as string;
     }
+
     const cartId = crypto.randomUUID();
-    await sql`
-      INSERT INTO carts (id, user_id, status)
-      VALUES (${cartId}, ${userId}, 'active')
-    `;
+    db.prepare(`INSERT INTO carts (id, user_id, status) VALUES (?, ?, 'active')`).run(cartId, userId);
     return cartId;
   },
 
   getCartItemsForUser: async (userId: string) => {
-    const result = await sql`
+    const db = getDb();
+    return db.prepare(`
       SELECT ci.product_id, ci.quantity, ci.variant_id, p.*
       FROM carts c
       JOIN cart_items ci ON ci.cart_id = c.id
       JOIN products p ON p.id = ci.product_id
-      WHERE c.user_id = ${userId} AND c.status = 'active'
+      WHERE c.user_id = ? AND c.status = 'active'
       ORDER BY ci.created_at ASC
-    `;
-    return result.rows;
+    `).all(userId);
   },
 
   setCartItemsForUser: async (
     userId: string,
     items: Array<{ productId: string; quantity: number; variantId?: string }>
   ) => {
+    const db = getDb();
     const cartId = await dbHelpers.getOrCreateCartId(userId);
-    await sql`DELETE FROM cart_items WHERE cart_id = ${cartId}`;
+    db.prepare(`DELETE FROM cart_items WHERE cart_id = ?`).run(cartId);
+
+    const insert = db.prepare(`
+      INSERT INTO cart_items (id, cart_id, product_id, variant_id, quantity)
+      VALUES (?, ?, ?, ?, ?)
+    `);
 
     for (const item of items) {
-      await sql`
-        INSERT INTO cart_items (id, cart_id, product_id, variant_id, quantity)
-        VALUES (
-          ${crypto.randomUUID()},
-          ${cartId},
-          ${item.productId},
-          ${item.variantId || ""},
-          ${item.quantity}
-        )
-      `;
+      insert.run(crypto.randomUUID(), cartId, item.productId, item.variantId || "", item.quantity);
     }
 
-    await sql`UPDATE carts SET updated_at = CURRENT_TIMESTAMP WHERE id = ${cartId}`;
+    db.prepare(`UPDATE carts SET updated_at = datetime('now') WHERE id = ?`).run(cartId);
     return dbHelpers.getCartItemsForUser(userId);
   },
 
   clearCartForUser: async (userId: string) => {
+    const db = getDb();
     const cartId = await dbHelpers.getOrCreateCartId(userId);
-    await sql`DELETE FROM cart_items WHERE cart_id = ${cartId}`;
-    await sql`UPDATE carts SET updated_at = CURRENT_TIMESTAMP WHERE id = ${cartId}`;
+    db.prepare(`DELETE FROM cart_items WHERE cart_id = ?`).run(cartId);
+    db.prepare(`UPDATE carts SET updated_at = datetime('now') WHERE id = ?`).run(cartId);
   },
 
   mergeCartItemsForUser: async (
     userId: string,
     items: Array<{ productId: string; quantity: number; variantId?: string }>
   ) => {
+    const db = getDb();
     const cartId = await dbHelpers.getOrCreateCartId(userId);
 
+    const upsert = db.prepare(`
+      INSERT INTO cart_items (id, cart_id, product_id, variant_id, quantity)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT (cart_id, product_id, variant_id)
+      DO UPDATE SET
+        quantity = MAX(cart_items.quantity, excluded.quantity),
+        updated_at = datetime('now')
+    `);
+
     for (const item of items) {
-      await sql`
-        INSERT INTO cart_items (id, cart_id, product_id, variant_id, quantity)
-        VALUES (
-          ${crypto.randomUUID()},
-          ${cartId},
-          ${item.productId},
-          ${item.variantId || ""},
-          ${item.quantity}
-        )
-        ON CONFLICT (cart_id, product_id, variant_id)
-        DO UPDATE SET
-          quantity = GREATEST(cart_items.quantity, EXCLUDED.quantity),
-          updated_at = CURRENT_TIMESTAMP
-      `;
+      upsert.run(crypto.randomUUID(), cartId, item.productId, item.variantId || "", item.quantity);
     }
 
-    await sql`UPDATE carts SET updated_at = CURRENT_TIMESTAMP WHERE id = ${cartId}`;
+    db.prepare(`UPDATE carts SET updated_at = datetime('now') WHERE id = ?`).run(cartId);
     return dbHelpers.getCartItemsForUser(userId);
   },
 };

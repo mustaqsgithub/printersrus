@@ -1,21 +1,4 @@
 // Seed script to populate the database with initial data
-import { config } from 'dotenv';
-import { resolve } from 'path';
-
-// Load environment variables from .env.local
-const envResult = config({ path: resolve(process.cwd(), '.env.local') });
-
-// Check if POSTGRES_URL is set
-if (!process.env.POSTGRES_URL) {
-  console.error('❌ Error: POSTGRES_URL environment variable is not set!');
-  console.error('\n📝 Please create a .env.local file in your project root with:');
-  console.error('   POSTGRES_URL=your_connection_string');
-  console.error('   POSTGRES_PRISMA_URL=your_connection_string');
-  console.error('   POSTGRES_URL_NON_POOLING=your_connection_string');
-  console.error('\n💡 See SETUP.md or QUICK-START.md for detailed instructions.');
-  process.exit(1);
-}
-
 import { initDatabase, dbHelpers } from '../lib/database';
 
 // Categories data
