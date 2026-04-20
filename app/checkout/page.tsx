@@ -28,17 +28,17 @@ export default function CheckoutPage() {
     shippingAddress1: "",
     shippingAddress2: "",
     shippingCity: "",
-    shippingState: "",
-    shippingPostalCode: "",
-    shippingCountry: "US",
+    shippingCounty: "",
+    shippingPostcode: "",
+    shippingCountry: "GB",
 
     // Billing Address
     billingAddress1: "",
     billingAddress2: "",
     billingCity: "",
-    billingState: "",
-    billingPostalCode: "",
-    billingCountry: "US",
+    billingCounty: "",
+    billingPostcode: "",
+    billingCountry: "GB",
 
     // Payment
     cardNumber: "",
@@ -60,19 +60,67 @@ export default function CheckoutPage() {
     e.preventDefault();
     setIsProcessing(true);
 
-    // Simulate payment processing
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const billing = sameAsShipping
+        ? {
+            address1: formData.shippingAddress1,
+            address2: formData.shippingAddress2,
+            city: formData.shippingCity,
+            county: formData.shippingCounty,
+            postcode: formData.shippingPostcode,
+            country: formData.shippingCountry,
+          }
+        : {
+            address1: formData.billingAddress1,
+            address2: formData.billingAddress2,
+            city: formData.billingCity,
+            county: formData.billingCounty,
+            postcode: formData.billingPostcode,
+            country: formData.billingCountry,
+          };
 
-    // In a real app, you would:
-    // 1. Process payment via Stripe/PayPal/etc.
-    // 2. Create order in database
-    // 3. Send confirmation email
-    // 4. Clear cart
-    // 5. Redirect to success page
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customer: {
+            email: formData.email,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            phone: formData.phone,
+          },
+          shippingAddress: {
+            address1: formData.shippingAddress1,
+            address2: formData.shippingAddress2,
+            city: formData.shippingCity,
+            county: formData.shippingCounty,
+            postcode: formData.shippingPostcode,
+            country: formData.shippingCountry,
+          },
+          billingAddress: billing,
+          items: items.map((i) => ({
+            productId: i.product.id,
+            quantity: i.quantity,
+            variantId: i.variantId,
+          })),
+        }),
+      });
 
-    clearCart();
-    setIsProcessing(false);
-    router.push("/checkout/success");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.message || "Checkout failed. Please try again.");
+        setIsProcessing(false);
+        return;
+      }
+
+      const { orderId } = await res.json();
+      clearCart();
+      setIsProcessing(false);
+      router.push(`/checkout/success?orderId=${orderId}`);
+    } catch {
+      alert("Something went wrong. Please try again.");
+      setIsProcessing(false);
+    }
   };
 
   if (items.length === 0) {
@@ -214,7 +262,7 @@ export default function CheckoutPage() {
                     <div className="grid md:grid-cols-3 gap-4">
                       <div>
                         <label htmlFor="shippingCity" className="block text-sm font-medium mb-1 text-gray-900">
-                          City *
+                          Town / City *
                         </label>
                         <input
                           type="text"
@@ -227,35 +275,123 @@ export default function CheckoutPage() {
                         />
                       </div>
                       <div>
-                        <label htmlFor="shippingState" className="block text-sm font-medium mb-1 text-gray-900">
-                          State *
+                        <label htmlFor="shippingCounty" className="block text-sm font-medium mb-1 text-gray-900">
+                          County
                         </label>
                         <input
                           type="text"
-                          id="shippingState"
-                          name="shippingState"
-                          required
-                          value={formData.shippingState}
+                          id="shippingCounty"
+                          name="shippingCounty"
+                          value={formData.shippingCounty}
                           onChange={handleChange}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
                         />
                       </div>
                       <div>
-                        <label htmlFor="shippingPostalCode" className="block text-sm font-medium mb-1 text-gray-900">
-                          ZIP Code *
+                        <label htmlFor="shippingPostcode" className="block text-sm font-medium mb-1 text-gray-900">
+                          Postcode *
                         </label>
                         <input
                           type="text"
-                          id="shippingPostalCode"
-                          name="shippingPostalCode"
+                          id="shippingPostcode"
+                          name="shippingPostcode"
                           required
-                          value={formData.shippingPostalCode}
+                          value={formData.shippingPostcode}
                           onChange={handleChange}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
                         />
                       </div>
                     </div>
                   </div>
+                </div>
+
+                {/* Billing Address */}
+                <div className="mb-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-semibold text-gray-900">Billing Address</h2>
+                    <label className="flex items-center gap-2 text-sm text-gray-900">
+                      <input
+                        type="checkbox"
+                        checked={sameAsShipping}
+                        onChange={(e) => setSameAsShipping(e.target.checked)}
+                      />
+                      Same as shipping
+                    </label>
+                  </div>
+                  {!sameAsShipping && (
+                    <div className="space-y-4">
+                      <div>
+                        <label htmlFor="billingAddress1" className="block text-sm font-medium mb-1 text-gray-900">
+                          Address Line 1 *
+                        </label>
+                        <input
+                          type="text"
+                          id="billingAddress1"
+                          name="billingAddress1"
+                          required
+                          value={formData.billingAddress1}
+                          onChange={handleChange}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="billingAddress2" className="block text-sm font-medium mb-1 text-gray-900">
+                          Address Line 2
+                        </label>
+                        <input
+                          type="text"
+                          id="billingAddress2"
+                          name="billingAddress2"
+                          value={formData.billingAddress2}
+                          onChange={handleChange}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                        />
+                      </div>
+                      <div className="grid md:grid-cols-3 gap-4">
+                        <div>
+                          <label htmlFor="billingCity" className="block text-sm font-medium mb-1 text-gray-900">
+                            Town / City *
+                          </label>
+                          <input
+                            type="text"
+                            id="billingCity"
+                            name="billingCity"
+                            required
+                            value={formData.billingCity}
+                            onChange={handleChange}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="billingCounty" className="block text-sm font-medium mb-1 text-gray-900">
+                            County
+                          </label>
+                          <input
+                            type="text"
+                            id="billingCounty"
+                            name="billingCounty"
+                            value={formData.billingCounty}
+                            onChange={handleChange}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="billingPostcode" className="block text-sm font-medium mb-1 text-gray-900">
+                            Postcode *
+                          </label>
+                          <input
+                            type="text"
+                            id="billingPostcode"
+                            name="billingPostcode"
+                            required
+                            value={formData.billingPostcode}
+                            onChange={handleChange}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Payment Information */}
@@ -387,7 +523,7 @@ export default function CheckoutPage() {
                     {shippingCost === 0 ? (
                       <span className="text-green-600">FREE</span>
                     ) : (
-                      `£{shippingCost.toFixed(2)}`
+                      `£${shippingCost.toFixed(2)}`
                     )}
                   </span>
                 </div>

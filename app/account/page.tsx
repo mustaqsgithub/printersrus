@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { 
   User, 
   Package, 
@@ -14,16 +15,36 @@ import {
   Edit,
   Check,
   X,
-  LogOut
+  LogOut,
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import { useAuthStore } from "@/lib/auth-store";
 
 export default function AccountPage() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'addresses' | 'settings'>('overview');
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'addresses' | 'settings' | 'notifications'>('overview');
   const [isEditing, setIsEditing] = useState(false);
   const { user, isLoading, updateProfile, signOut, loadUser } = useAuthStore();
   const [verificationUrl, setVerificationUrl] = useState<string | null>(null);
   const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
+
+  const [orders, setOrders] = useState<any[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [showPayments, setShowPayments] = useState(false);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [passwordData, setPasswordData] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     firstName: "",
@@ -37,6 +58,14 @@ export default function AccountPage() {
     loadUser();
   }, [loadUser]);
 
+  // Handle ?tab= URL parameter
+  useEffect(() => {
+    const validTabs = ["overview", "orders", "addresses", "settings", "notifications"] as const;
+    if (tabParam && validTabs.includes(tabParam as any)) {
+      setActiveTab(tabParam as typeof activeTab);
+    }
+  }, [tabParam]);
+
   useEffect(() => {
     if (!user) {
       return;
@@ -48,60 +77,71 @@ export default function AccountPage() {
       phone: user.phone || "",
       dateJoined: user.dateJoined,
     });
+
+    // Fetch real orders for the logged-in user
+    setOrdersLoading(true);
+    fetch("/api/orders")
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => setOrders(data.orders || []))
+      .catch(() => setOrders([]))
+      .finally(() => setOrdersLoading(false));
   }, [user]);
 
-  // Mock order history
-  const orders = [
-    {
-      id: 'ORD-001',
-      date: '2024-01-20',
-      status: 'Delivered',
-      total: 388.78,
-      items: 2,
-    },
-    {
-      id: 'ORD-002',
-      date: '2024-01-10',
-      status: 'Processing',
-      total: 179.99,
-      items: 1,
-    },
-    {
-      id: 'ORD-003',
-      date: '2023-12-28',
-      status: 'Delivered',
-      total: 289.99,
-      items: 1,
-    },
-  ];
+  // Fetch notifications when tab is active
+  useEffect(() => {
+    if (activeTab !== "notifications" || !user) return;
+    setNotificationsLoading(true);
+    fetch("/api/notifications")
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => setNotifications(data.notifications || []))
+      .catch(() => setNotifications([]))
+      .finally(() => setNotificationsLoading(false));
+  }, [activeTab, user]);
 
-  // Mock addresses
-  const addresses = [
-    {
-      id: '1',
-      type: 'Home',
-      name: 'John Doe',
-      address1: '123 Main Street',
-      address2: 'Apt 4B',
-      city: 'London',
-      state: 'Greater London',
-      postalCode: 'SW1A 1AA',
-      country: 'United Kingdom',
-      isDefault: true,
-    },
-    {
-      id: '2',
-      type: 'Work',
-      name: 'John Doe',
-      address1: '456 Business Park',
-      address2: 'Suite 200',
-      city: 'Manchester',
-      state: 'Greater Manchester',
-      postalCode: 'M1 1AA',
-      country: 'United Kingdom',
-      isDefault: false,
-    },
-  ];
+
+  // Derive unique addresses from real orders
+  const addresses = (() => {
+    if (!orders.length) return [];
+    const seen = new Set<string>();
+    const result: Array<{
+      id: string;
+      type: string;
+      address1: string;
+      address2?: string;
+      city: string;
+      county?: string;
+      postcode: string;
+      country: string;
+      isDefault: boolean;
+    }> = [];
+
+    for (const order of orders) {
+      for (const field of ["shipping_address", "billing_address"] as const) {
+        try {
+          const raw = order[field];
+          if (!raw) continue;
+          const addr = typeof raw === "string" ? JSON.parse(raw) : raw;
+          const key = `${addr.address1}|${addr.postcode}`.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          result.push({
+            id: `${order.id}-${field}`,
+            type: field === "shipping_address" ? "Shipping" : "Billing",
+            address1: addr.address1,
+            address2: addr.address2 || undefined,
+            city: addr.city,
+            county: addr.county || addr.state || undefined,
+            postcode: addr.postcode,
+            country: addr.country === "GB" ? "United Kingdom" : addr.country,
+            isDefault: result.length === 0, // first address = default
+          });
+        } catch {
+          // skip unparseable
+        }
+      }
+    }
+    return result;
+  })();
 
   const handleSave = async () => {
     setIsEditing(false);
@@ -117,6 +157,53 @@ export default function AccountPage() {
     if (data?.verificationUrl) {
       setVerificationUrl(data.verificationUrl);
       setVerificationMessage("Please verify your new email address.");
+    }
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+      setPasswordError("All fields are required.");
+      return;
+    }
+    if (passwordData.newPassword.length < 8) {
+      setPasswordError("New password must be at least 8 characters.");
+      return;
+    }
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setPasswordError("New passwords do not match.");
+      return;
+    }
+
+    setPasswordLoading(true);
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: passwordData.currentPassword,
+          newPassword: passwordData.newPassword,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPasswordError(data.message || "Failed to change password.");
+        return;
+      }
+      setPasswordSuccess("Password changed successfully.");
+      setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setShowCurrentPassword(false);
+      setShowNewPassword(false);
+      setTimeout(() => {
+        setShowPasswordForm(false);
+        setPasswordSuccess(null);
+      }, 2000);
+    } catch {
+      setPasswordError("Something went wrong. Please try again.");
+    } finally {
+      setPasswordLoading(false);
     }
   };
 
@@ -143,6 +230,7 @@ export default function AccountPage() {
   const tabs = [
     { id: 'overview', label: 'Overview', icon: User },
     { id: 'orders', label: 'Orders', icon: Package },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'addresses', label: 'Addresses', icon: MapPin },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
@@ -412,29 +500,38 @@ export default function AccountPage() {
 
                 {/* Quick Stats */}
                 <div className="grid md:grid-cols-3 gap-6">
-                  <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <button
+                    onClick={() => setActiveTab('orders')}
+                    className="bg-white border border-gray-200 rounded-lg p-6 text-left hover:shadow-md hover:border-primary-300 transition cursor-pointer"
+                  >
                     <div className="flex items-center gap-3 mb-2">
                       <Package size={24} className="text-primary-600" />
                       <h3 className="text-lg font-semibold text-gray-900">Total Orders</h3>
                     </div>
                     <p className="text-3xl font-bold text-gray-900">{orders.length}</p>
-                  </div>
+                  </button>
 
-                  <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <button
+                    onClick={() => setActiveTab('addresses')}
+                    className="bg-white border border-gray-200 rounded-lg p-6 text-left hover:shadow-md hover:border-primary-300 transition cursor-pointer"
+                  >
                     <div className="flex items-center gap-3 mb-2">
                       <MapPin size={24} className="text-primary-600" />
                       <h3 className="text-lg font-semibold text-gray-900">Saved Addresses</h3>
                     </div>
                     <p className="text-3xl font-bold text-gray-900">{addresses.length}</p>
-                  </div>
+                  </button>
 
-                  <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <button
+                    onClick={() => setActiveTab('settings')}
+                    className="bg-white border border-gray-200 rounded-lg p-6 text-left hover:shadow-md hover:border-primary-300 transition cursor-pointer"
+                  >
                     <div className="flex items-center gap-3 mb-2">
                       <CreditCard size={24} className="text-primary-600" />
                       <h3 className="text-lg font-semibold text-gray-900">Payment Methods</h3>
                     </div>
                     <p className="text-3xl font-bold text-gray-900">1</p>
-                  </div>
+                  </button>
                 </div>
               </div>
             )}
@@ -443,7 +540,11 @@ export default function AccountPage() {
             {activeTab === 'orders' && (
               <div className="bg-white border border-gray-200 rounded-lg p-6">
                 <h2 className="text-2xl font-bold mb-6 text-gray-900">Order History</h2>
-                {orders.length === 0 ? (
+                {ordersLoading ? (
+                  <div className="text-center py-12">
+                    <p className="text-gray-900">Loading orders...</p>
+                  </div>
+                ) : orders.length === 0 ? (
                   <div className="text-center py-12">
                     <Package size={64} className="mx-auto text-gray-300 mb-4" />
                     <p className="text-gray-900 mb-4">You haven&apos;t placed any orders yet.</p>
@@ -465,31 +566,35 @@ export default function AccountPage() {
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
                               <h3 className="text-lg font-semibold text-gray-900">
-                                Order {order.id}
+                                Order {order.order_number}
                               </h3>
                               <span
                                 className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                  order.status === 'Delivered'
+                                  order.status === 'delivered'
                                     ? 'bg-green-100 text-green-800'
+                                    : order.status === 'shipped'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : order.status === 'cancelled'
+                                    ? 'bg-red-100 text-red-800'
                                     : 'bg-yellow-100 text-yellow-800'
                                 }`}
                               >
-                                {order.status}
+                                {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                               </span>
                             </div>
                             <p className="text-sm text-gray-900">
-                              Placed on {new Date(order.date).toLocaleDateString('en-GB', {
+                              Placed on {new Date(order.created_at).toLocaleDateString('en-GB', {
                                 year: 'numeric',
                                 month: 'long',
                                 day: 'numeric',
                               })}
                             </p>
-                            <p className="text-sm text-gray-900">{order.items} item(s)</p>
+                            <p className="text-sm text-gray-900">{order.item_count} item(s)</p>
                           </div>
                           <div className="flex items-center gap-4">
                             <div className="text-right">
                               <p className="text-2xl font-bold text-gray-900">
-                                £{order.total.toFixed(2)}
+                                £{Number(order.total_amount).toFixed(2)}
                               </p>
                             </div>
                             <Link
@@ -507,17 +612,133 @@ export default function AccountPage() {
               </div>
             )}
 
+            {/* Notifications Tab */}
+            {activeTab === 'notifications' && (
+              <div className="bg-white border border-gray-200 rounded-lg p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Notifications</h2>
+                  {notifications.some((n) => !n.read) && (
+                    <button
+                      onClick={async () => {
+                        await fetch("/api/notifications", {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ markAllRead: true }),
+                        });
+                        setNotifications((prev) => prev.map((n) => ({ ...n, read: 1 })));
+                      }}
+                      className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                    >
+                      Mark all as read
+                    </button>
+                  )}
+                </div>
+                {notificationsLoading ? (
+                  <div className="text-center py-12">
+                    <p className="text-gray-900">Loading notifications...</p>
+                  </div>
+                ) : notifications.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Bell size={64} className="mx-auto text-gray-300 mb-4" />
+                    <p className="text-gray-900 mb-2">No notifications yet.</p>
+                    <p className="text-sm text-gray-500">
+                      {user?.emailNotifications
+                        ? "You'll receive notifications when your order status changes."
+                        : "Enable email notifications in Settings to receive order updates."}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {notifications.map((n) => (
+                      <div
+                        key={n.id}
+                        className={`border rounded-lg p-4 transition ${
+                          n.read ? "border-gray-200 bg-white" : "border-primary-200 bg-primary-50"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-start gap-3 flex-1">
+                            <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${n.read ? "bg-gray-300" : "bg-primary-600"}`} />
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h3 className="font-semibold text-gray-900">{n.title}</h3>
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                  n.type === "order_placed"
+                                    ? "bg-green-100 text-green-800"
+                                    : n.type === "order_status"
+                                    ? "bg-blue-100 text-blue-800"
+                                    : "bg-gray-100 text-gray-800"
+                                }`}>
+                                  {n.type === "order_placed" ? "Order" : n.type === "order_status" ? "Update" : n.type}
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-700">{n.message}</p>
+                              <p className="text-xs text-gray-400 mt-1">
+                                {new Date(n.created_at).toLocaleDateString("en-GB", {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {n.order_id && (
+                              <Link
+                                href={`/orders/${n.order_id}`}
+                                className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                              >
+                                View Order
+                              </Link>
+                            )}
+                            {!n.read && (
+                              <button
+                                onClick={async () => {
+                                  await fetch("/api/notifications", {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ notificationId: n.id }),
+                                  });
+                                  setNotifications((prev) =>
+                                    prev.map((item) => item.id === n.id ? { ...item, read: 1 } : item)
+                                  );
+                                }}
+                                className="text-xs text-gray-500 hover:text-gray-700"
+                              >
+                                Mark read
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Addresses Tab */}
             {activeTab === 'addresses' && (
               <div className="space-y-6">
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-2xl font-bold text-gray-900">Saved Addresses</h2>
-                    <button className="bg-primary-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-primary-700 transition">
-                      Add New Address
-                    </button>
                   </div>
 
+                  {addresses.length === 0 ? (
+                    <div className="text-center py-12">
+                      <MapPin size={64} className="mx-auto text-gray-300 mb-4" />
+                      <p className="text-gray-900 mb-4">No addresses yet. Place an order to save an address.</p>
+                      <Link
+                        href="/products"
+                        className="inline-block bg-primary-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-primary-700 transition"
+                      >
+                        Start Shopping
+                      </Link>
+                    </div>
+                  ) : (
                   <div className="grid md:grid-cols-2 gap-6">
                     {addresses.map((address) => (
                       <div
@@ -536,32 +757,20 @@ export default function AccountPage() {
                               {address.type} Address
                             </h3>
                             <div className="text-gray-900 space-y-1">
-                              <p>{address.name}</p>
                               <p>{address.address1}</p>
                               {address.address2 && <p>{address.address2}</p>}
                               <p>
-                                {address.city}, {address.state} {address.postalCode}
+                                {address.city}{address.county ? `, ${address.county}` : ""}
                               </p>
+                              <p>{address.postcode}</p>
                               <p>{address.country}</p>
                             </div>
                           </div>
                         </div>
-                        <div className="flex gap-2 mt-4">
-                          <button className="flex-1 text-primary-600 hover:text-primary-700 font-medium py-2 border border-primary-600 rounded-lg hover:bg-primary-50 transition">
-                            Edit
-                          </button>
-                          {!address.isDefault && (
-                            <button className="flex-1 text-gray-900 hover:text-gray-700 font-medium py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
-                              Set as Default
-                            </button>
-                          )}
-                          <button className="text-red-600 hover:text-red-700 font-medium py-2 px-4 border border-red-600 rounded-lg hover:bg-red-50 transition">
-                            Delete
-                          </button>
-                        </div>
                       </div>
                     ))}
                   </div>
+                  )}
                 </div>
               </div>
             )}
@@ -573,17 +782,115 @@ export default function AccountPage() {
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
                   <h2 className="text-2xl font-bold mb-6 text-gray-900">Account Settings</h2>
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between py-3 border-b border-gray-200">
-                      <div className="flex items-center gap-3">
-                        <Lock size={20} className="text-primary-600" />
-                        <div>
-                          <h3 className="font-semibold text-gray-900">Password</h3>
-                          <p className="text-sm text-gray-900">Last changed 3 months ago</p>
+                    <div className="py-3 border-b border-gray-200">
+                      <button
+                        onClick={() => {
+                          setShowPasswordForm(!showPasswordForm);
+                          setPasswordError(null);
+                          setPasswordSuccess(null);
+                        }}
+                        className="w-full flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Lock size={20} className="text-primary-600" />
+                          <div className="text-left">
+                            <h3 className="font-semibold text-gray-900">Password</h3>
+                            <p className="text-sm text-gray-900">Change your account password</p>
+                          </div>
                         </div>
-                      </div>
-                      <button className="text-primary-600 hover:text-primary-700 font-medium">
-                        Change Password
+                        {showPasswordForm ? (
+                          <ChevronUp size={20} className="text-primary-600" />
+                        ) : (
+                          <ChevronDown size={20} className="text-primary-600" />
+                        )}
                       </button>
+
+                      {showPasswordForm && (
+                        <div className="mt-4 space-y-4 max-w-md">
+                          {passwordError && (
+                            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                              {passwordError}
+                            </div>
+                          )}
+                          {passwordSuccess && (
+                            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+                              {passwordSuccess}
+                            </div>
+                          )}
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-900 mb-1">Current Password</label>
+                            <div className="relative">
+                              <input
+                                type={showCurrentPassword ? "text" : "password"}
+                                value={passwordData.currentPassword}
+                                onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                                placeholder="Enter current password"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-900 mb-1">New Password</label>
+                            <div className="relative">
+                              <input
+                                type={showNewPassword ? "text" : "password"}
+                                value={passwordData.newPassword}
+                                onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                                placeholder="At least 8 characters"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowNewPassword(!showNewPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-900 mb-1">Confirm New Password</label>
+                            <input
+                              type="password"
+                              value={passwordData.confirmPassword}
+                              onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                              placeholder="Re-enter new password"
+                            />
+                          </div>
+
+                          <div className="flex gap-3 pt-2">
+                            <button
+                              onClick={handleChangePassword}
+                              disabled={passwordLoading}
+                              className="flex items-center gap-2 bg-primary-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-primary-700 transition disabled:opacity-50"
+                            >
+                              {passwordLoading ? "Saving..." : "Update Password"}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowPasswordForm(false);
+                                setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+                                setPasswordError(null);
+                                setPasswordSuccess(null);
+                              }}
+                              className="flex items-center gap-2 bg-gray-200 text-gray-900 px-6 py-2 rounded-lg font-semibold hover:bg-gray-300 transition"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center justify-between py-3 border-b border-gray-200">
@@ -595,22 +902,68 @@ export default function AccountPage() {
                         </div>
                       </div>
                       <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" className="sr-only peer" defaultChecked />
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={user?.emailNotifications ?? true}
+                          onChange={async (e) => {
+                            const enabled = e.target.checked;
+                            try {
+                              const res = await fetch("/api/auth/notifications", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ emailNotifications: enabled }),
+                              });
+                              if (res.ok) {
+                                await loadUser();
+                              }
+                            } catch {
+                              // revert on failure by reloading
+                              await loadUser();
+                            }
+                          }}
+                        />
                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
                       </label>
                     </div>
 
-                    <div className="flex items-center justify-between py-3 border-b border-gray-200">
-                      <div className="flex items-center gap-3">
-                        <CreditCard size={20} className="text-primary-600" />
-                        <div>
-                          <h3 className="font-semibold text-gray-900">Payment Methods</h3>
-                          <p className="text-sm text-gray-900">Manage saved payment cards</p>
+                    <div className="py-3 border-b border-gray-200">
+                      <button
+                        onClick={() => setShowPayments(!showPayments)}
+                        className="w-full flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <CreditCard size={20} className="text-primary-600" />
+                          <div className="text-left">
+                            <h3 className="font-semibold text-gray-900">Payment Methods</h3>
+                            <p className="text-sm text-gray-900">Manage saved payment cards</p>
+                          </div>
                         </div>
-                      </div>
-                      <button className="text-primary-600 hover:text-primary-700 font-medium">
-                        Manage
+                        {showPayments ? (
+                          <ChevronUp size={20} className="text-primary-600" />
+                        ) : (
+                          <ChevronDown size={20} className="text-primary-600" />
+                        )}
                       </button>
+
+                      {showPayments && (
+                        <div className="mt-4 space-y-4">
+                          <div className="border border-gray-200 rounded-lg p-4 flex items-center gap-4">
+                            <div className="w-12 h-8 bg-gradient-to-r from-blue-600 to-blue-800 rounded flex items-center justify-center">
+                              <CreditCard size={16} className="text-white" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-medium text-gray-900">Visa ending in 4242</p>
+                              <p className="text-sm text-gray-500">Expires 12/28</p>
+                            </div>
+                            <span className="bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full text-xs font-semibold">Default</span>
+                          </div>
+
+                          <button className="w-full border border-dashed border-gray-300 rounded-lg p-4 text-primary-600 hover:bg-primary-50 hover:border-primary-300 transition font-medium text-sm flex items-center justify-center gap-2">
+                            + Add New Payment Method
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
