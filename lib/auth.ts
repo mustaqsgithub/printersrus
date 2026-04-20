@@ -1,4 +1,4 @@
-import { sql } from "@vercel/postgres";
+import { getDb } from "./db";
 import crypto from "crypto";
 
 const PASSWORD_ITERATIONS = 120000;
@@ -56,55 +56,44 @@ export const createUser = async (input: {
   phone?: string;
   password: string;
 }) => {
+  const db = getDb();
   const id = crypto.randomUUID();
   const normalizedEmail = input.email.trim().toLowerCase();
   const passwordHash = createPasswordHash(input.password);
-  await sql`
+  db.prepare(`
     INSERT INTO users (id, first_name, last_name, email, phone, password_hash, role)
-    VALUES (
-      ${id},
-      ${input.firstName},
-      ${input.lastName},
-      ${normalizedEmail},
-      ${input.phone || null},
-      ${passwordHash},
-      'customer'
-    )
-  `;
-  const result = await sql`
+    VALUES (?, ?, ?, ?, ?, ?, 'customer')
+  `).run(id, input.firstName, input.lastName, normalizedEmail, input.phone || null, passwordHash);
+
+  return db.prepare(`
     SELECT id, first_name, last_name, email, phone, role, email_verified_at, created_at
-    FROM users
-    WHERE id = ${id}
-  `;
-  return result.rows[0] as DbUser;
+    FROM users WHERE id = ?
+  `).get(id) as DbUser;
 };
 
 export const getUserByEmail = async (email: string) => {
+  const db = getDb();
   const normalizedEmail = email.trim().toLowerCase();
-  const result = await sql`
+  return (db.prepare(`
     SELECT id, first_name, last_name, email, phone, role, email_verified_at, password_hash, created_at
-    FROM users
-    WHERE LOWER(email) = ${normalizedEmail}
-  `;
-  return (result.rows[0] as DbUserWithPassword) || null;
+    FROM users WHERE LOWER(email) = ?
+  `).get(normalizedEmail) as DbUserWithPassword) || null;
 };
 
 export const getUserById = async (id: string) => {
-  const result = await sql`
+  const db = getDb();
+  return (db.prepare(`
     SELECT id, first_name, last_name, email, phone, role, email_verified_at, created_at
-    FROM users
-    WHERE id = ${id}
-  `;
-  return result.rows[0] as DbUser | null;
+    FROM users WHERE id = ?
+  `).get(id) as DbUser) || null;
 };
 
 export const listUsers = async () => {
-  const result = await sql`
+  const db = getDb();
+  return db.prepare(`
     SELECT id, first_name, last_name, email, phone, role, email_verified_at, created_at
-    FROM users
-    ORDER BY created_at DESC
-  `;
-  return result.rows as DbUser[];
+    FROM users ORDER BY created_at DESC
+  `).all() as DbUser[];
 };
 
 export const updateUser = async (
@@ -118,32 +107,32 @@ export const updateUser = async (
     role?: string;
   }
 ) => {
+  const db = getDb();
   const fields: string[] = [];
-  const values: Array<string | null | Date> = [];
-  let paramIndex = 1;
+  const values: Array<string | null> = [];
 
   if (updates.firstName !== undefined) {
-    fields.push(`first_name = $${paramIndex++}`);
+    fields.push("first_name = ?");
     values.push(updates.firstName);
   }
   if (updates.lastName !== undefined) {
-    fields.push(`last_name = $${paramIndex++}`);
+    fields.push("last_name = ?");
     values.push(updates.lastName);
   }
   if (updates.email !== undefined) {
-    fields.push(`email = $${paramIndex++}`);
+    fields.push("email = ?");
     values.push(updates.email);
   }
   if (updates.phone !== undefined) {
-    fields.push(`phone = $${paramIndex++}`);
+    fields.push("phone = ?");
     values.push(updates.phone || null);
   }
   if (updates.emailVerifiedAt !== undefined) {
-    fields.push(`email_verified_at = $${paramIndex++}`);
-    values.push(updates.emailVerifiedAt);
+    fields.push("email_verified_at = ?");
+    values.push(updates.emailVerifiedAt ? updates.emailVerifiedAt.toISOString() : null);
   }
   if (updates.role !== undefined) {
-    fields.push(`role = $${paramIndex++}`);
+    fields.push("role = ?");
     values.push(updates.role);
   }
 
@@ -152,115 +141,123 @@ export const updateUser = async (
   }
 
   values.push(id);
-  const query = `UPDATE users SET ${fields.join(", ")}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramIndex} RETURNING id, first_name, last_name, email, phone, role, email_verified_at, created_at`;
-  const result = await sql.query(query, values);
-  return result.rows[0] as DbUser;
+  db.prepare(`UPDATE users SET ${fields.join(", ")}, updated_at = datetime('now') WHERE id = ?`).run(...values);
+
+  return db.prepare(`
+    SELECT id, first_name, last_name, email, phone, role, email_verified_at, created_at
+    FROM users WHERE id = ?
+  `).get(id) as DbUser;
 };
 
 const hashSessionToken = (token: string) =>
   crypto.createHash("sha256").update(token).digest("hex");
 
 export const createSession = async (userId: string) => {
+  const db = getDb();
   const token = crypto.randomBytes(32).toString("base64url");
   const tokenHash = hashSessionToken(token);
   const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
-  await sql`
+  db.prepare(`
     INSERT INTO sessions (id, user_id, token_hash, expires_at)
-    VALUES (${crypto.randomUUID()}, ${userId}, ${tokenHash}, ${expiresAt.toISOString()})
-  `;
+    VALUES (?, ?, ?, ?)
+  `).run(crypto.randomUUID(), userId, tokenHash, expiresAt.toISOString());
   return { token, expiresAt };
 };
 
 export const getSessionUser = async (token: string) => {
+  const db = getDb();
   const tokenHash = hashSessionToken(token);
-  const result = await sql`
+  return (db.prepare(`
     SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.role, u.email_verified_at, u.created_at
     FROM sessions s
     JOIN users u ON s.user_id = u.id
-    WHERE s.token_hash = ${tokenHash}
-      AND s.expires_at > NOW()
+    WHERE s.token_hash = ?
+      AND s.expires_at > datetime('now')
     LIMIT 1
-  `;
-  return result.rows[0] as DbUser | null;
+  `).get(tokenHash) as DbUser) || null;
 };
 
 export const deleteSession = async (token: string) => {
+  const db = getDb();
   const tokenHash = hashSessionToken(token);
-  await sql`DELETE FROM sessions WHERE token_hash = ${tokenHash}`;
+  db.prepare(`DELETE FROM sessions WHERE token_hash = ?`).run(tokenHash);
 };
 
 const createTokenHash = (token: string) =>
   crypto.createHash("sha256").update(token).digest("hex");
 
 export const createEmailVerificationToken = async (userId: string) => {
+  const db = getDb();
   const token = crypto.randomBytes(32).toString("base64url");
   const tokenHash = createTokenHash(token);
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  await sql`DELETE FROM email_verification_tokens WHERE user_id = ${userId}`;
-  await sql`
+  db.prepare(`DELETE FROM email_verification_tokens WHERE user_id = ?`).run(userId);
+  db.prepare(`
     INSERT INTO email_verification_tokens (id, user_id, token_hash, expires_at)
-    VALUES (${crypto.randomUUID()}, ${userId}, ${tokenHash}, ${expiresAt.toISOString()})
-  `;
+    VALUES (?, ?, ?, ?)
+  `).run(crypto.randomUUID(), userId, tokenHash, expiresAt.toISOString());
   return { token, expiresAt };
 };
 
 export const verifyEmailToken = async (token: string) => {
+  const db = getDb();
   const tokenHash = createTokenHash(token);
-  const result = await sql`
+  const record = db.prepare(`
     SELECT user_id, expires_at
     FROM email_verification_tokens
-    WHERE token_hash = ${tokenHash}
+    WHERE token_hash = ?
     LIMIT 1
-  `;
-  const record = result.rows[0];
+  `).get(tokenHash) as any;
+
   if (!record || new Date(record.expires_at) < new Date()) {
     return null;
   }
 
   const user = await updateUser(record.user_id, { emailVerifiedAt: new Date() });
-  await sql`DELETE FROM email_verification_tokens WHERE token_hash = ${tokenHash}`;
+  db.prepare(`DELETE FROM email_verification_tokens WHERE token_hash = ?`).run(tokenHash);
   return user;
 };
 
 export const createPasswordResetToken = async (userId: string) => {
+  const db = getDb();
   const token = crypto.randomBytes(32).toString("base64url");
   const tokenHash = createTokenHash(token);
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-  await sql`DELETE FROM password_reset_tokens WHERE user_id = ${userId}`;
-  await sql`
+  db.prepare(`DELETE FROM password_reset_tokens WHERE user_id = ?`).run(userId);
+  db.prepare(`
     INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at)
-    VALUES (${crypto.randomUUID()}, ${userId}, ${tokenHash}, ${expiresAt.toISOString()})
-  `;
+    VALUES (?, ?, ?, ?)
+  `).run(crypto.randomUUID(), userId, tokenHash, expiresAt.toISOString());
   return { token, expiresAt };
 };
 
 export const resetPasswordWithToken = async (token: string, password: string) => {
+  const db = getDb();
   const tokenHash = createTokenHash(token);
-  const result = await sql`
+  const record = db.prepare(`
     SELECT user_id, expires_at
     FROM password_reset_tokens
-    WHERE token_hash = ${tokenHash}
+    WHERE token_hash = ?
     LIMIT 1
-  `;
-  const record = result.rows[0];
+  `).get(tokenHash) as any;
+
   if (!record || new Date(record.expires_at) < new Date()) {
     return null;
   }
 
   const passwordHash = createPasswordHash(password);
-  await sql`
-    UPDATE users SET password_hash = ${passwordHash}, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ${record.user_id}
-  `;
-  await sql`DELETE FROM password_reset_tokens WHERE token_hash = ${tokenHash}`;
+  db.prepare(`
+    UPDATE users SET password_hash = ?, updated_at = datetime('now')
+    WHERE id = ?
+  `).run(passwordHash, record.user_id);
+  db.prepare(`DELETE FROM password_reset_tokens WHERE token_hash = ?`).run(tokenHash);
   return getUserById(record.user_id);
 };
 
 export const isAdminRegistered = async () => {
-  const result = await sql`
-    SELECT 1 FROM users WHERE role = 'admin' LIMIT 1
-  `;
-  return result.rows.length > 0;
+  const db = getDb();
+  const row = db.prepare(`SELECT 1 FROM users WHERE role = 'admin' LIMIT 1`).get();
+  return !!row;
 };
 
 export const createAdminUser = async (input: {
@@ -270,31 +267,21 @@ export const createAdminUser = async (input: {
   phone?: string;
   password: string;
 }) => {
+  const db = getDb();
   const id = crypto.randomUUID();
   const normalizedEmail = input.email.trim().toLowerCase();
   const passwordHash = createPasswordHash(input.password);
-  const now = new Date();
+  const now = new Date().toISOString();
 
-  await sql`
+  db.prepare(`
     INSERT INTO users (id, first_name, last_name, email, phone, password_hash, role, email_verified_at)
-    VALUES (
-      ${id},
-      ${input.firstName},
-      ${input.lastName},
-      ${normalizedEmail},
-      ${input.phone || null},
-      ${passwordHash},
-      'admin',
-      ${now.toISOString()}
-    )
-  `;
+    VALUES (?, ?, ?, ?, ?, ?, 'admin', ?)
+  `).run(id, input.firstName, input.lastName, normalizedEmail, input.phone || null, passwordHash, now);
 
-  const result = await sql`
+  return db.prepare(`
     SELECT id, first_name, last_name, email, phone, role, email_verified_at, created_at
-    FROM users
-    WHERE id = ${id}
-  `;
-  return result.rows[0] as DbUser;
+    FROM users WHERE id = ?
+  `).get(id) as DbUser;
 };
 
 export const updateUserPasswordAndRole = async (input: {
@@ -303,21 +290,25 @@ export const updateUserPasswordAndRole = async (input: {
   role?: string;
   verifyEmail?: boolean;
 }) => {
+  const db = getDb();
   const normalizedEmail = input.email.trim().toLowerCase();
   const passwordHash = createPasswordHash(input.password);
   const role = input.role || "admin";
   const emailVerifiedAt = input.verifyEmail ? new Date().toISOString() : null;
 
-  const result = await sql`
+  db.prepare(`
     UPDATE users
-    SET password_hash = ${passwordHash},
-        role = ${role},
-        email_verified_at = ${emailVerifiedAt},
-        updated_at = CURRENT_TIMESTAMP
-    WHERE LOWER(email) = ${normalizedEmail}
-    RETURNING id, first_name, last_name, email, phone, role, email_verified_at, created_at
-  `;
-  return (result.rows[0] as DbUser) || null;
+    SET password_hash = ?,
+        role = ?,
+        email_verified_at = ?,
+        updated_at = datetime('now')
+    WHERE LOWER(email) = ?
+  `).run(passwordHash, role, emailVerifiedAt, normalizedEmail);
+
+  return (db.prepare(`
+    SELECT id, first_name, last_name, email, phone, role, email_verified_at, created_at
+    FROM users WHERE LOWER(email) = ?
+  `).get(normalizedEmail) as DbUser) || null;
 };
 
 export const createUserWithRole = async (input: {
@@ -329,51 +320,45 @@ export const createUserWithRole = async (input: {
   role?: string;
   verifyEmail?: boolean;
 }) => {
+  const db = getDb();
   const id = crypto.randomUUID();
   const normalizedEmail = input.email.trim().toLowerCase();
   const passwordHash = createPasswordHash(input.password);
   const role = input.role || "customer";
   const emailVerifiedAt = input.verifyEmail ? new Date().toISOString() : null;
 
-  await sql`
+  db.prepare(`
     INSERT INTO users (id, first_name, last_name, email, phone, password_hash, role, email_verified_at)
-    VALUES (
-      ${id},
-      ${input.firstName},
-      ${input.lastName},
-      ${normalizedEmail},
-      ${input.phone || null},
-      ${passwordHash},
-      ${role},
-      ${emailVerifiedAt}
-    )
-  `;
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, input.firstName, input.lastName, normalizedEmail, input.phone || null, passwordHash, role, emailVerifiedAt);
 
-  const result = await sql`
+  return db.prepare(`
     SELECT id, first_name, last_name, email, phone, role, email_verified_at, created_at
-    FROM users
-    WHERE id = ${id}
-  `;
-  return result.rows[0] as DbUser;
+    FROM users WHERE id = ?
+  `).get(id) as DbUser;
 };
 
 export const updateUserRole = async (id: string, role: string) => {
-  const result = await sql`
-    UPDATE users
-    SET role = ${role}, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ${id}
-    RETURNING id, first_name, last_name, email, phone, role, email_verified_at, created_at
-  `;
-  return (result.rows[0] as DbUser) || null;
+  const db = getDb();
+  db.prepare(`
+    UPDATE users SET role = ?, updated_at = datetime('now') WHERE id = ?
+  `).run(role, id);
+
+  return (db.prepare(`
+    SELECT id, first_name, last_name, email, phone, role, email_verified_at, created_at
+    FROM users WHERE id = ?
+  `).get(id) as DbUser) || null;
 };
 
 export const updateUserPasswordById = async (id: string, password: string) => {
+  const db = getDb();
   const passwordHash = createPasswordHash(password);
-  const result = await sql`
-    UPDATE users
-    SET password_hash = ${passwordHash}, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ${id}
-    RETURNING id, first_name, last_name, email, phone, role, email_verified_at, created_at
-  `;
-  return (result.rows[0] as DbUser) || null;
+  db.prepare(`
+    UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?
+  `).run(passwordHash, id);
+
+  return (db.prepare(`
+    SELECT id, first_name, last_name, email, phone, role, email_verified_at, created_at
+    FROM users WHERE id = ?
+  `).get(id) as DbUser) || null;
 };

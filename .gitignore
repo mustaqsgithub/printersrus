@@ -39,7 +39,10 @@ next-env.d.ts
 
 # database
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
+/data/
 localDB.db
 localDB.db-*
 local.db
