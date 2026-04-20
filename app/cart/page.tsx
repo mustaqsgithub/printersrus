@@ -144,7 +144,7 @@ export default function CartPage() {
                   {shippingCost === 0 ? (
                     <span className="text-green-600">FREE</span>
                   ) : (
-                    `£{shippingCost.toFixed(2)}`
+                    `£${shippingCost.toFixed(2)}`
                   )}
                 </span>
               </div>

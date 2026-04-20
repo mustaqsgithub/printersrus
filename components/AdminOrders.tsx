@@ -8,6 +8,8 @@ type Order = {
   orderNumber: string;
   customerName: string;
   customerEmail: string;
+  shippingAddress: string;
+  billingAddress: string;
   status: string;
   paymentStatus: string;
   totalAmount: number;
@@ -19,7 +21,18 @@ export function AdminOrders() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const { toast } = useToast();
+
+  const formatAddress = (raw: string) => {
+    try {
+      const a = JSON.parse(raw);
+      const parts = [a.address1, a.address2, a.city, a.county, a.postcode, a.country].filter(Boolean);
+      return parts.join(", ");
+    } catch {
+      return raw;
+    }
+  };
 
   const loadOrders = async () => {
     setIsLoading(true);
@@ -77,7 +90,7 @@ export function AdminOrders() {
               </tr>
             </thead>
             <tbody>
-              {orders.map((order) => (
+              {orders.flatMap((order) => [
                 <tr key={order.id} className="border-b">
                   <td className="px-3 py-2">{order.orderNumber}</td>
                   <td className="px-3 py-2">
@@ -127,7 +140,7 @@ export function AdminOrders() {
                       ))}
                     </select>
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-2 space-x-2">
                     <button
                       onClick={() =>
                         updateOrder(order.id, {
@@ -140,9 +153,33 @@ export function AdminOrders() {
                     >
                       {updatingId === order.id ? "Saving..." : "Save"}
                     </button>
+                    <button
+                      onClick={() =>
+                        setExpandedId(expandedId === order.id ? null : order.id)
+                      }
+                      className="text-gray-600 hover:text-gray-800 font-semibold"
+                    >
+                      {expandedId === order.id ? "Hide" : "View"}
+                    </button>
                   </td>
-                </tr>
-              ))}
+                </tr>,
+                expandedId === order.id ? (
+                  <tr key={`${order.id}-detail`} className="border-b bg-gray-50">
+                    <td colSpan={6} className="px-3 py-3">
+                      <div className="grid sm:grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="font-semibold text-gray-700 mb-1">Shipping Address</p>
+                          <p className="text-gray-900">{formatAddress(order.shippingAddress)}</p>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-700 mb-1">Billing Address</p>
+                          <p className="text-gray-900">{formatAddress(order.billingAddress)}</p>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ) : null,
+              ])}
             </tbody>
           </table>
         </div>

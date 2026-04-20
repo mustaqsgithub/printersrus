@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ShoppingCart, Search, Menu, User } from "lucide-react";
+import { ShoppingCart, Search, Menu, User, Bell } from "lucide-react";
 import { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useCartStore } from "@/lib/cart-store";
@@ -13,6 +13,7 @@ export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [unreadCount, setUnreadCount] = useState(0);
   const router = useRouter();
   const { getTotalItems } = useCartStore();
   const { user, loadUser } = useAuthStore();
@@ -23,6 +24,23 @@ export function Header() {
     setMounted(true);
     loadUser();
   }, [loadUser]);
+
+  // Fetch unread notification count for logged-in users
+  useEffect(() => {
+    if (!user) {
+      setUnreadCount(0);
+      return;
+    }
+    const fetchCount = () => {
+      fetch("/api/notifications")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => { if (data) setUnreadCount(data.unreadCount ?? 0); })
+        .catch(() => {});
+    };
+    fetchCount();
+    const interval = setInterval(fetchCount, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   const handleSearch = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -77,6 +95,19 @@ export function Header() {
                 className="hidden md:block text-sm text-gray-900 hover:text-primary-600 font-semibold"
               >
                 Admin
+              </Link>
+            )}
+            {mounted && user && (
+              <Link
+                href="/account?tab=notifications"
+                className="hidden md:flex items-center text-gray-900 hover:text-primary-600 relative"
+              >
+                <Bell size={20} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
               </Link>
             )}
             <Link

@@ -84,7 +84,35 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ message: "No updates provided." }, { status: 400 });
     }
 
+    // Fetch order before update to detect status change
+    const orderBefore = await dbHelpers.getOrderById(id);
+
     await dbHelpers.updateOrder(id, updates);
+
+    // Send notification on status change
+    if (orderBefore && updates.status && updates.status !== (orderBefore as any).status) {
+      const order = orderBefore as any;
+      const statusLabels: Record<string, string> = {
+        pending: "Pending",
+        processing: "Processing",
+        shipped: "Shipped",
+        delivered: "Delivered",
+        cancelled: "Cancelled",
+      };
+      const newStatusLabel = statusLabels[updates.status] || updates.status;
+      const trackingInfo = updates.tracking_number
+        ? ` Tracking: ${updates.tracking_number}`
+        : "";
+
+      await dbHelpers.createNotification({
+        userEmail: order.customer_email,
+        type: "order_status",
+        title: `Order ${newStatusLabel}`,
+        message: `Your order ${order.order_number} has been updated to ${newStatusLabel}.${trackingInfo}`,
+        orderId: id,
+      });
+    }
+
     return NextResponse.json({ id });
   } catch (error) {
     console.error("Error updating order:", error);
