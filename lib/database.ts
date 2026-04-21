@@ -205,6 +205,22 @@ export async function initDatabase() {
       )
     `);
 
+    // Payment methods table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS payment_methods (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        card_type TEXT NOT NULL,
+        last_four TEXT NOT NULL,
+        expiry_month INTEGER NOT NULL,
+        expiry_year INTEGER NOT NULL,
+        cardholder_name TEXT NOT NULL,
+        is_default INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+
     console.log('Database initialized successfully!');
   } catch (error) {
     console.error('Error initializing database:', error);
@@ -577,6 +593,65 @@ export const dbHelpers = {
     db.prepare(
       `UPDATE notifications SET read = 1 WHERE user_email = ? AND read = 0`
     ).run(email.toLowerCase());
+  },
+
+  // Payment methods
+  getPaymentMethodsByUserId: async (userId: string) => {
+    const db = getDb();
+    return db.prepare(
+      `SELECT * FROM payment_methods WHERE user_id = ? ORDER BY is_default DESC, created_at DESC`
+    ).all(userId);
+  },
+
+  addPaymentMethod: async (pm: {
+    userId: string;
+    cardType: string;
+    lastFour: string;
+    expiryMonth: number;
+    expiryYear: number;
+    cardholderName: string;
+  }) => {
+    const db = getDb();
+    const id = crypto.randomUUID();
+    // If this is the first card, make it default
+    const existing = db.prepare(
+      `SELECT COUNT(*) as count FROM payment_methods WHERE user_id = ?`
+    ).get(pm.userId) as any;
+    const isDefault = existing.count === 0 ? 1 : 0;
+
+    db.prepare(`
+      INSERT INTO payment_methods (id, user_id, card_type, last_four, expiry_month, expiry_year, cardholder_name, is_default)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, pm.userId, pm.cardType, pm.lastFour, pm.expiryMonth, pm.expiryYear, pm.cardholderName, isDefault);
+
+    return id;
+  },
+
+  deletePaymentMethod: async (id: string, userId: string) => {
+    const db = getDb();
+    const pm = db.prepare(
+      `SELECT * FROM payment_methods WHERE id = ? AND user_id = ?`
+    ).get(id, userId) as any;
+    if (!pm) return false;
+
+    db.prepare(`DELETE FROM payment_methods WHERE id = ? AND user_id = ?`).run(id, userId);
+
+    // If deleted card was default, promote the next one
+    if (pm.is_default) {
+      const next = db.prepare(
+        `SELECT id FROM payment_methods WHERE user_id = ? ORDER BY created_at ASC LIMIT 1`
+      ).get(userId) as any;
+      if (next) {
+        db.prepare(`UPDATE payment_methods SET is_default = 1 WHERE id = ?`).run(next.id);
+      }
+    }
+    return true;
+  },
+
+  setDefaultPaymentMethod: async (id: string, userId: string) => {
+    const db = getDb();
+    db.prepare(`UPDATE payment_methods SET is_default = 0 WHERE user_id = ?`).run(userId);
+    db.prepare(`UPDATE payment_methods SET is_default = 1 WHERE id = ? AND user_id = ?`).run(id, userId);
   },
 };
 

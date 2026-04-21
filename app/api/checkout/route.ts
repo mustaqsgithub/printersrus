@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { initDatabase, dbHelpers } from "@/lib/database";
 import { getDb } from "@/lib/db";
+import { sendOrderConfirmationEmail } from "@/lib/email";
 import crypto from "crypto";
 
 interface AddressInput {
@@ -131,7 +132,26 @@ export async function POST(request: NextRequest) {
       orderId,
     });
 
-    return NextResponse.json({ orderId, orderNumber });
+    // Send order confirmation email
+    const emailPreviewUrl = await sendOrderConfirmationEmail({
+      orderNumber,
+      orderId,
+      customerName: `${customer.firstName} ${customer.lastName}`,
+      customerEmail: customer.email,
+      items: orderItems.map((oi) => ({
+        productName: oi.productName,
+        quantity: oi.quantity,
+        price: oi.price,
+        totalPrice: oi.totalPrice,
+      })),
+      subtotal,
+      shippingAmount,
+      taxAmount,
+      totalAmount,
+      shippingAddress,
+    });
+
+    return NextResponse.json({ orderId, orderNumber, emailPreviewUrl });
   } catch (error) {
     console.error("Checkout error:", error);
     return NextResponse.json({ message: "Checkout failed." }, { status: 500 });

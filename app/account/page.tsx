@@ -43,6 +43,18 @@ export default function AccountPage() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
 
+  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
+  const [showAddPaymentForm, setShowAddPaymentForm] = useState(false);
+  const [paymentFormData, setPaymentFormData] = useState({
+    cardNumber: "",
+    expiryMonth: "",
+    expiryYear: "",
+    cardholderName: "",
+  });
+  const [paymentFormError, setPaymentFormError] = useState<string | null>(null);
+  const [paymentFormLoading, setPaymentFormLoading] = useState(false);
+
   const [notifications, setNotifications] = useState<any[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
 
@@ -85,6 +97,12 @@ export default function AccountPage() {
       .then((data) => setOrders(data.orders || []))
       .catch(() => setOrders([]))
       .finally(() => setOrdersLoading(false));
+
+    // Fetch payment methods count for overview
+    fetch("/api/payment-methods")
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => setPaymentMethods(data.paymentMethods || []))
+      .catch(() => setPaymentMethods([]));
   }, [user]);
 
   // Fetch notifications when tab is active
@@ -96,6 +114,17 @@ export default function AccountPage() {
       .then((data) => setNotifications(data.notifications || []))
       .catch(() => setNotifications([]))
       .finally(() => setNotificationsLoading(false));
+  }, [activeTab, user]);
+
+  // Fetch payment methods when settings tab is active
+  useEffect(() => {
+    if (activeTab !== "settings" || !user) return;
+    setPaymentMethodsLoading(true);
+    fetch("/api/payment-methods")
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => setPaymentMethods(data.paymentMethods || []))
+      .catch(() => setPaymentMethods([]))
+      .finally(() => setPaymentMethodsLoading(false));
   }, [activeTab, user]);
 
 
@@ -224,6 +253,49 @@ export default function AccountPage() {
       setVerificationMessage(
         err instanceof Error ? err.message : "Unable to send verification email."
       );
+    }
+  };
+
+  const handleAddPaymentMethod = async () => {
+    setPaymentFormError(null);
+    const { cardNumber, expiryMonth, expiryYear, cardholderName } = paymentFormData;
+
+    if (!cardNumber || !expiryMonth || !expiryYear || !cardholderName) {
+      setPaymentFormError("All fields are required.");
+      return;
+    }
+
+    setPaymentFormLoading(true);
+    try {
+      const res = await fetch("/api/payment-methods", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardNumber, expiryMonth, expiryYear, cardholderName }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPaymentFormError(data.message || "Failed to add payment method.");
+        return;
+      }
+      setPaymentMethods(data.paymentMethods || []);
+      setPaymentFormData({ cardNumber: "", expiryMonth: "", expiryYear: "", cardholderName: "" });
+      setShowAddPaymentForm(false);
+    } catch {
+      setPaymentFormError("Something went wrong. Please try again.");
+    } finally {
+      setPaymentFormLoading(false);
+    }
+  };
+
+  const handleDeletePaymentMethod = async (id: string) => {
+    try {
+      const res = await fetch(`/api/payment-methods?id=${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok) {
+        setPaymentMethods(data.paymentMethods || []);
+      }
+    } catch {
+      // ignore
     }
   };
 
@@ -530,7 +602,7 @@ export default function AccountPage() {
                       <CreditCard size={24} className="text-primary-600" />
                       <h3 className="text-lg font-semibold text-gray-900">Payment Methods</h3>
                     </div>
-                    <p className="text-3xl font-bold text-gray-900">1</p>
+                    <p className="text-3xl font-bold text-gray-900">{paymentMethods.length}</p>
                   </button>
                 </div>
               </div>
@@ -948,20 +1020,125 @@ export default function AccountPage() {
 
                       {showPayments && (
                         <div className="mt-4 space-y-4">
-                          <div className="border border-gray-200 rounded-lg p-4 flex items-center gap-4">
-                            <div className="w-12 h-8 bg-gradient-to-r from-blue-600 to-blue-800 rounded flex items-center justify-center">
-                              <CreditCard size={16} className="text-white" />
-                            </div>
-                            <div className="flex-1">
-                              <p className="font-medium text-gray-900">Visa ending in 4242</p>
-                              <p className="text-sm text-gray-500">Expires 12/28</p>
-                            </div>
-                            <span className="bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full text-xs font-semibold">Default</span>
-                          </div>
+                          {paymentMethodsLoading ? (
+                            <p className="text-gray-500 text-sm">Loading payment methods...</p>
+                          ) : paymentMethods.length === 0 && !showAddPaymentForm ? (
+                            <p className="text-gray-500 text-sm">No saved payment methods.</p>
+                          ) : (
+                            paymentMethods.map((pm) => (
+                              <div key={pm.id} className="border border-gray-200 rounded-lg p-4 flex items-center gap-4">
+                                <div className="w-12 h-8 bg-gradient-to-r from-blue-600 to-blue-800 rounded flex items-center justify-center">
+                                  <CreditCard size={16} className="text-white" />
+                                </div>
+                                <div className="flex-1">
+                                  <p className="font-medium text-gray-900">{pm.card_type} ending in {pm.last_four}</p>
+                                  <p className="text-sm text-gray-500">Expires {String(pm.expiry_month).padStart(2, "0")}/{pm.expiry_year}</p>
+                                </div>
+                                {pm.is_default ? (
+                                  <span className="bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full text-xs font-semibold">Default</span>
+                                ) : null}
+                                <button
+                                  onClick={() => handleDeletePaymentMethod(pm.id)}
+                                  className="text-red-500 hover:text-red-700 text-sm font-medium"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ))
+                          )}
 
-                          <button className="w-full border border-dashed border-gray-300 rounded-lg p-4 text-primary-600 hover:bg-primary-50 hover:border-primary-300 transition font-medium text-sm flex items-center justify-center gap-2">
-                            + Add New Payment Method
-                          </button>
+                          {showAddPaymentForm ? (
+                            <div className="border border-gray-200 rounded-lg p-4 space-y-4">
+                              <h4 className="font-semibold text-gray-900">Add New Card</h4>
+                              {paymentFormError && (
+                                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                                  {paymentFormError}
+                                </div>
+                              )}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-900 mb-1">Cardholder Name</label>
+                                <input
+                                  type="text"
+                                  value={paymentFormData.cardholderName}
+                                  onChange={(e) => setPaymentFormData({ ...paymentFormData, cardholderName: e.target.value })}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                                  placeholder="Name as it appears on card"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-900 mb-1">Card Number</label>
+                                <input
+                                  type="text"
+                                  value={paymentFormData.cardNumber}
+                                  onChange={(e) => {
+                                    const raw = e.target.value.replace(/\D/g, "").slice(0, 19);
+                                    const formatted = raw.replace(/(\d{4})(?=\d)/g, "$1 ");
+                                    setPaymentFormData({ ...paymentFormData, cardNumber: formatted });
+                                  }}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                                  placeholder="1234 5678 9012 3456"
+                                  maxLength={23}
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-900 mb-1">Expiry Month</label>
+                                  <select
+                                    value={paymentFormData.expiryMonth}
+                                    onChange={(e) => setPaymentFormData({ ...paymentFormData, expiryMonth: e.target.value })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                                  >
+                                    <option value="">Month</option>
+                                    {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                                      <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-900 mb-1">Expiry Year</label>
+                                  <select
+                                    value={paymentFormData.expiryYear}
+                                    onChange={(e) => setPaymentFormData({ ...paymentFormData, expiryYear: e.target.value })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                                  >
+                                    <option value="">Year</option>
+                                    {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() % 100 + i).map((y) => (
+                                      <option key={y} value={y}>{2000 + y}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                              <div className="flex gap-3 pt-2">
+                                <button
+                                  onClick={handleAddPaymentMethod}
+                                  disabled={paymentFormLoading}
+                                  className="flex items-center gap-2 bg-primary-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-primary-700 transition disabled:opacity-50"
+                                >
+                                  {paymentFormLoading ? "Saving..." : "Add Card"}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setShowAddPaymentForm(false);
+                                    setPaymentFormError(null);
+                                    setPaymentFormData({ cardNumber: "", expiryMonth: "", expiryYear: "", cardholderName: "" });
+                                  }}
+                                  className="flex items-center gap-2 bg-gray-200 text-gray-900 px-6 py-2 rounded-lg font-semibold hover:bg-gray-300 transition"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setShowAddPaymentForm(true);
+                                setPaymentFormError(null);
+                              }}
+                              className="w-full border border-dashed border-gray-300 rounded-lg p-4 text-primary-600 hover:bg-primary-50 hover:border-primary-300 transition font-medium text-sm flex items-center justify-center gap-2"
+                            >
+                              + Add New Payment Method
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>

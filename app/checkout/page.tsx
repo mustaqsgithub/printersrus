@@ -1,21 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, Lock } from "lucide-react";
+import { ArrowLeft, Lock, CreditCard } from "lucide-react";
 import { useCartStore } from "@/lib/cart-store";
+import { useAuthStore } from "@/lib/auth-store";
 
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, getTotalPrice, clearCart } = useCartStore();
+  const { user, loadUser } = useAuthStore();
   const [isProcessing, setIsProcessing] = useState(false);
 
   const totalPrice = getTotalPrice();
   const shippingCost = totalPrice > 50 ? 0 : 8.99;
   const tax = totalPrice * 0.08;
   const grandTotal = totalPrice + shippingCost + tax;
+
+  const [savedPaymentMethods, setSavedPaymentMethods] = useState<any[]>([]);
+  const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
+  const [paymentMode, setPaymentMode] = useState<"saved" | "new">("new");
+  const [saveNewCard, setSaveNewCard] = useState(false);
 
   const [formData, setFormData] = useState({
     // Customer Info
@@ -49,6 +56,40 @@ export default function CheckoutPage() {
 
   const [sameAsShipping, setSameAsShipping] = useState(true);
 
+  // Load user on mount
+  useEffect(() => {
+    loadUser();
+  }, [loadUser]);
+
+  // Pre-fill contact info from user profile
+  useEffect(() => {
+    if (!user) return;
+    setFormData((prev) => ({
+      ...prev,
+      email: prev.email || user.email,
+      firstName: prev.firstName || user.firstName,
+      lastName: prev.lastName || user.lastName,
+      phone: prev.phone || user.phone || "",
+    }));
+  }, [user]);
+
+  // Fetch saved payment methods when user is available
+  useEffect(() => {
+    if (!user) return;
+    fetch("/api/payment-methods")
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => {
+        const methods = data.paymentMethods || [];
+        setSavedPaymentMethods(methods);
+        if (methods.length > 0) {
+          const defaultCard = methods.find((m: any) => m.is_default) || methods[0];
+          setSelectedPaymentId(defaultCard.id);
+          setPaymentMode("saved");
+        }
+      })
+      .catch(() => setSavedPaymentMethods([]));
+  }, [user]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
       ...formData,
@@ -61,6 +102,23 @@ export default function CheckoutPage() {
     setIsProcessing(true);
 
     try {
+      // If user chose "new" payment and wants to save the card, save it first
+      if (paymentMode === "new" && saveNewCard && user) {
+        const [expMonth, expYear] = formData.cardExpiry.split("/").map((s) => s.trim());
+        if (expMonth && expYear) {
+          await fetch("/api/payment-methods", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              cardNumber: formData.cardNumber,
+              expiryMonth: expMonth,
+              expiryYear: expYear,
+              cardholderName: formData.cardName,
+            }),
+          }).catch(() => {});
+        }
+      }
+
       const billing = sameAsShipping
         ? {
             address1: formData.shippingAddress1,
@@ -113,10 +171,12 @@ export default function CheckoutPage() {
         return;
       }
 
-      const { orderId } = await res.json();
+      const { orderId, orderNumber, emailPreviewUrl } = await res.json();
       clearCart();
       setIsProcessing(false);
-      router.push(`/checkout/success?orderId=${orderId}`);
+      const params = new URLSearchParams({ orderId, orderNumber });
+      if (emailPreviewUrl) params.set("emailPreview", emailPreviewUrl);
+      router.push(`/checkout/success?${params.toString()}`);
     } catch {
       alert("Something went wrong. Please try again.");
       setIsProcessing(false);
@@ -401,69 +461,146 @@ export default function CheckoutPage() {
                     <Lock size={14} className="inline mr-1" />
                     Your payment information is secure and encrypted
                   </p>
-                  <div className="space-y-4">
-                    <div>
-                      <label htmlFor="cardName" className="block text-sm font-medium mb-1 text-gray-900">
-                        Name on Card *
+
+                  {/* Saved payment methods (logged-in users with cards) */}
+                  {savedPaymentMethods.length > 0 && (
+                    <div className="mb-4 space-y-3">
+                      {savedPaymentMethods.map((pm) => (
+                        <label
+                          key={pm.id}
+                          className={`flex items-center gap-4 border rounded-lg p-4 cursor-pointer transition ${
+                            paymentMode === "saved" && selectedPaymentId === pm.id
+                              ? "border-primary-600 bg-primary-50"
+                              : "border-gray-200 hover:border-gray-300"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="paymentSelection"
+                            checked={paymentMode === "saved" && selectedPaymentId === pm.id}
+                            onChange={() => {
+                              setPaymentMode("saved");
+                              setSelectedPaymentId(pm.id);
+                            }}
+                            className="accent-primary-600"
+                          />
+                          <div className="w-10 h-7 bg-gradient-to-r from-blue-600 to-blue-800 rounded flex items-center justify-center flex-shrink-0">
+                            <CreditCard size={14} className="text-white" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-900">{pm.card_type} ending in {pm.last_four}</p>
+                            <p className="text-sm text-gray-500">Expires {String(pm.expiry_month).padStart(2, "0")}/{pm.expiry_year}</p>
+                          </div>
+                          {pm.is_default ? (
+                            <span className="bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full text-xs font-semibold">Default</span>
+                          ) : null}
+                        </label>
+                      ))}
+
+                      {/* Option to use a new card */}
+                      <label
+                        className={`flex items-center gap-4 border rounded-lg p-4 cursor-pointer transition ${
+                          paymentMode === "new"
+                            ? "border-primary-600 bg-primary-50"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="paymentSelection"
+                          checked={paymentMode === "new"}
+                          onChange={() => setPaymentMode("new")}
+                          className="accent-primary-600"
+                        />
+                        <div className="w-10 h-7 border-2 border-dashed border-gray-300 rounded flex items-center justify-center flex-shrink-0">
+                          <span className="text-gray-400 text-lg leading-none">+</span>
+                        </div>
+                        <p className="font-medium text-gray-900">Use a new card</p>
                       </label>
-                      <input
-                        type="text"
-                        id="cardName"
-                        name="cardName"
-                        required
-                        value={formData.cardName}
-                        onChange={handleChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
-                      />
                     </div>
-                    <div>
-                      <label htmlFor="cardNumber" className="block text-sm font-medium mb-1 text-gray-900">
-                        Card Number *
-                      </label>
-                      <input
-                        type="text"
-                        id="cardNumber"
-                        name="cardNumber"
-                        required
-                        placeholder="1234 5678 9012 3456"
-                        value={formData.cardNumber}
-                        onChange={handleChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
+                  )}
+
+                  {/* New card form (always shown if no saved cards, or when "new" mode selected) */}
+                  {(paymentMode === "new" || savedPaymentMethods.length === 0) && (
+                    <div className="space-y-4">
                       <div>
-                        <label htmlFor="cardExpiry" className="block text-sm font-medium mb-1 text-gray-900">
-                          Expiry Date *
+                        <label htmlFor="cardName" className="block text-sm font-medium mb-1 text-gray-900">
+                          Name on Card *
                         </label>
                         <input
                           type="text"
-                          id="cardExpiry"
-                          name="cardExpiry"
-                          required
-                          placeholder="MM/YY"
-                          value={formData.cardExpiry}
+                          id="cardName"
+                          name="cardName"
+                          required={paymentMode === "new"}
+                          value={formData.cardName}
                           onChange={handleChange}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
                         />
                       </div>
                       <div>
-                        <label htmlFor="cardCvc" className="block text-sm font-medium mb-1 text-gray-900">
-                          CVC *
+                        <label htmlFor="cardNumber" className="block text-sm font-medium mb-1 text-gray-900">
+                          Card Number *
                         </label>
                         <input
                           type="text"
-                          id="cardCvc"
-                          name="cardCvc"
-                          required
-                          placeholder="123"
-                          value={formData.cardCvc}
-                          onChange={handleChange}
+                          id="cardNumber"
+                          name="cardNumber"
+                          required={paymentMode === "new"}
+                          placeholder="1234 5678 9012 3456"
+                          value={formData.cardNumber}
+                          onChange={(e) => {
+                            const raw = e.target.value.replace(/\D/g, "").slice(0, 19);
+                            const formatted = raw.replace(/(\d{4})(?=\d)/g, "$1 ");
+                            setFormData({ ...formData, cardNumber: formatted });
+                          }}
+                          maxLength={23}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
                         />
                       </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor="cardExpiry" className="block text-sm font-medium mb-1 text-gray-900">
+                            Expiry Date *
+                          </label>
+                          <input
+                            type="text"
+                            id="cardExpiry"
+                            name="cardExpiry"
+                            required={paymentMode === "new"}
+                            placeholder="MM/YY"
+                            value={formData.cardExpiry}
+                            onChange={handleChange}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="cardCvc" className="block text-sm font-medium mb-1 text-gray-900">
+                            CVC *
+                          </label>
+                          <input
+                            type="text"
+                            id="cardCvc"
+                            name="cardCvc"
+                            required={paymentMode === "new"}
+                            placeholder="123"
+                            value={formData.cardCvc}
+                            onChange={handleChange}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                          />
+                        </div>
+                      </div>
+                      {user && (
+                        <label className="flex items-center gap-2 text-sm text-gray-900">
+                          <input
+                            type="checkbox"
+                            checked={saveNewCard}
+                            onChange={(e) => setSaveNewCard(e.target.checked)}
+                          />
+                          Save this card for future purchases
+                        </label>
+                      )}
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Submit Button */}
