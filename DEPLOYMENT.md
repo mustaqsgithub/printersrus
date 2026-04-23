@@ -1,161 +1,265 @@
-# PrintersRUs — Deployment Guide
+# PrintersRUs — AWS EC2 + GoDaddy Domain Deployment Guide
 
-## Hosting: Render + GoDaddy Domain
+## Architecture
 
-The app is hosted on **Render** (Docker-based, supports SQLite with persistent disk) with the **printersrus.co.uk** domain managed on GoDaddy.
+```
+GoDaddy DNS (printersrus.co.uk)  →  AWS EC2 (Ubuntu)
+                                      ├── Nginx (reverse proxy + SSL)
+                                      ├── Next.js app (Docker)
+                                      └── SQLite (persistent volume)
+```
 
----
-
-## 1. Create a Render Account
-
-1. Go to **https://render.com** and sign up (use "Sign up with GitHub" for easiest setup)
-2. Connect your GitHub account when prompted
-
----
-
-## 2. Deploy the App on Render
-
-### Option A: Blueprint (recommended)
-
-1. Go to **https://render.com/deploy**
-2. Click **New Blueprint Instance**
-3. Select the `mustaqsgithub/printersrus` repository
-4. Render reads `render.yaml` and sets everything up automatically
-5. Click **Apply** — Render will build the Docker image and deploy
-
-### Option B: Manual setup
-
-1. Go to **Render Dashboard > New > Web Service**
-2. Connect your GitHub repo: `mustaqsgithub/printersrus`
-3. Configure:
-   - **Name**: `printersrus`
-   - **Region**: `Frankfurt` (closest to UK)
-   - **Runtime**: `Docker`
-   - **Plan**: `Starter` ($7/mo — persistent disk, no cold starts)
-4. Add **Environment Variables**:
-   | Key | Value |
-   |---|---|
-   | `NODE_ENV` | `production` |
-   | `NEXT_PUBLIC_BASE_URL` | `https://printersrus.co.uk` |
-   | `BASE_URL` | `https://printersrus.co.uk` |
-   | `COOKIE_SECURE` | `true` |
-   | `NEXT_PUBLIC_STORE_NAME` | `PrintersRUs` |
-   | `NEXT_PUBLIC_STORE_DESCRIPTION` | `Your one-stop shop for printers, ink & accessories` |
-   | `ADMIN_SETUP_KEY` | *(click "Generate" or set your own secret)* |
-5. Add **Disk**:
-   - **Name**: `printersrus-data`
-   - **Mount Path**: `/app/data`
-   - **Size**: `1 GB`
-6. Click **Create Web Service**
-
-After the build completes (~2-3 minutes), your app will be live at `https://printersrus.onrender.com`.
+**Estimated cost:** ~$9/month (EC2 t3.micro with free tier, or ~$4/month after)
 
 ---
 
-## 3. Point Your GoDaddy Domain to Render
+## 1. Create an AWS Account
 
-### a) Add your custom domain in Render
+1. Go to **https://aws.amazon.com** and click **Create an AWS Account**
+2. Enter your email, set a password, provide billing info
+3. Choose the **Free Tier** — includes a `t2.micro` instance free for 12 months
 
-1. In the **Render dashboard**, open your `printersrus` service
-2. Go to **Settings > Custom Domains**
-3. Click **Add Custom Domain**
-4. Add: `printersrus.co.uk`
-5. Add: `www.printersrus.co.uk`
-6. Render will show you the DNS records you need to create
+---
 
-### b) Update DNS in GoDaddy
+## 2. Launch an EC2 Instance
 
-1. Log in to **GoDaddy** > **My Products** > **DNS** for `printersrus.co.uk`
-2. Update/add these records:
+### a) Open EC2 Dashboard
+
+1. Log in to **AWS Console**: https://console.aws.amazon.com
+2. Search for **EC2** and open it
+3. Click **Launch Instance**
+
+### b) Configure the instance
+
+| Setting | Value |
+|---|---|
+| **Name** | `printersrus` |
+| **AMI** | Ubuntu Server 24.04 LTS (free tier eligible) |
+| **Instance type** | `t2.micro` (free tier) or `t3.small` (recommended) |
+| **Key pair** | Create new → name it `printersrus-key` → download the `.pem` file |
+| **Network settings** | Allow SSH (22), HTTP (80), HTTPS (443) from anywhere |
+| **Storage** | 20 GB gp3 (default is fine) |
+
+### c) Launch and note the public IP
+
+After launch, go to **Instances** and note the **Public IPv4 address** (e.g. `3.10.45.123`).
+
+### d) Save your key file
+
+```bash
+# Move the downloaded key to your SSH directory
+mv ~/Downloads/printersrus-key.pem ~/.ssh/
+chmod 400 ~/.ssh/printersrus-key.pem
+```
+
+---
+
+## 3. Point Your GoDaddy Domain to EC2
+
+In the **GoDaddy DNS Manager** for `printersrus.co.uk`:
 
 | Type | Name | Value | TTL |
 |---|---|---|---|
-| **CNAME** | `www` | `printersrus.onrender.com` | 600 |
-| **A** | `@` | *(IP provided by Render)* | 600 |
+| **A** | `@` | `<your-ec2-ip>` | 600 |
+| **A** | `www` | `<your-ec2-ip>` | 600 |
 
-> Render shows the exact values on the Custom Domains page. The A record IP may vary — use what Render tells you.
+Replace `<your-ec2-ip>` with the public IP from step 2. DNS propagation takes 5-30 minutes.
 
-3. **Remove** any conflicting A records for `@` or `www` that point elsewhere
+> **Tip:** Consider attaching an **Elastic IP** in AWS so the IP doesn't change if you stop/start the instance. It's free while the instance is running.
 
-### c) Wait for DNS + SSL
+---
 
-- DNS propagation: 5-30 minutes
-- Render automatically provisions a free **SSL certificate** (Let's Encrypt) once DNS is verified
-- Check status on Render's Custom Domains page — it will show a green checkmark when ready
+## 4. Set Up the Server
+
+### a) SSH into the instance
+
+```bash
+ssh -i ~/.ssh/printersrus-key.pem ubuntu@<your-ec2-ip>
+```
+
+### b) Run the automated setup script
+
+From your **local machine**, copy the project files to the server:
+
+```bash
+scp -i ~/.ssh/printersrus-key.pem -r ./* ubuntu@<your-ec2-ip>:/tmp/printersrus/
+```
+
+Then on the **server**:
+
+```bash
+sudo mkdir -p /opt/printersrus
+sudo cp -r /tmp/printersrus/* /opt/printersrus/
+sudo chown -R ubuntu:ubuntu /opt/printersrus
+cd /opt/printersrus
+chmod +x deploy/setup-server.sh
+sudo deploy/setup-server.sh
+```
+
+### c) Or set up manually
+
+```bash
+# Install Docker
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker ubuntu
+newgrp docker
+
+# Verify
+docker --version
+```
+
+---
+
+## 5. Configure Environment
+
+```bash
+cd /opt/printersrus
+
+# Generate a secure admin setup key
+cat > .env <<EOF
+ADMIN_SETUP_KEY=$(openssl rand -hex 24)
+EOF
+
+# Note down the key — you'll need it later
+cat .env
+```
+
+---
+
+## 6. Build & Start the Application
+
+```bash
+cd /opt/printersrus
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Verify it's running:
+```bash
+docker compose -f docker-compose.prod.yml ps
+curl -I http://localhost
+```
+
+---
+
+## 7. Obtain SSL Certificate (HTTPS)
+
+Once DNS has propagated (verify with `dig printersrus.co.uk`):
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm certbot \
+  certonly --webroot -w /var/www/certbot \
+  -d printersrus.co.uk -d www.printersrus.co.uk \
+  --email your-email@example.com --agree-tos --no-eff-email
+```
+
+---
+
+## 8. Enable HTTPS in Nginx
+
+Edit `deploy/nginx/app.conf`:
+
+1. **Uncomment** the entire `server { listen 443 ... }` block (remove all the `#` prefixes)
+2. Save the file
+
+Reload Nginx:
+```bash
+docker compose -f docker-compose.prod.yml restart nginx
+```
 
 Your site is now live at **https://printersrus.co.uk**
 
 ---
 
-## 4. Set Up the Admin Account
+## 9. Set Up the Admin Account
 
-1. Visit `https://printersrus.co.uk/admin/setup`
-2. Fill in your name, email, password
-3. Enter the **ADMIN_SETUP_KEY** from your Render environment variables
-   - Find it in: **Render Dashboard > printersrus > Environment > ADMIN_SETUP_KEY**
+Visit `https://printersrus.co.uk/admin/setup` and enter:
+- Your name, email, password
+- The **ADMIN_SETUP_KEY** from step 5
 
 ---
 
-## 5. Set Up CI/CD (GitHub Actions)
+## 10. SSL Auto-Renewal
 
-The project includes two GitHub Actions workflows:
+The `certbot` container automatically renews certificates every 12 hours. To test:
 
-- **CI** (`.github/workflows/ci.yml`) — runs tests on every push and PR
-- **CD** (`.github/workflows/deploy.yml`) — tests then triggers Render deploy on push to `main`
+```bash
+docker compose -f docker-compose.prod.yml run --rm certbot renew --dry-run
+```
 
-### a) Get your Render Deploy Hook
+---
 
-1. In **Render Dashboard > printersrus > Settings > Build & Deploy**
-2. Scroll to **Deploy Hook**
-3. Click **Create Deploy Hook** — copy the URL
+## 11. Set Up CI/CD (GitHub Actions)
 
-### b) Add GitHub Secret
+### a) Clone the repo on EC2
+
+Replace the copied files with a proper git clone:
+
+```bash
+cd /opt
+sudo rm -rf printersrus
+git clone https://github.com/mustaqsgithub/printersrus.git printersrus
+cp /path/to/your/.env printersrus/.env
+cd printersrus
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+### b) Add GitHub Secrets
 
 Go to your repo: **Settings > Secrets and variables > Actions > New repository secret**
 
 | Secret | Value |
 |---|---|
-| `RENDER_DEPLOY_HOOK` | The deploy hook URL from Render |
+| `EC2_HOST` | Your EC2 public IP (e.g. `3.10.45.123`) |
+| `EC2_SSH_KEY` | Contents of `~/.ssh/printersrus-key.pem` |
 
-### c) Create GitHub Environment (optional)
-
-Go to **Settings > Environments > New environment**, name it `production`. Optionally add:
-- **Required reviewers** — for manual approval before deploy
-- **Wait timer** — delay before deploy starts
-
-### d) How it works
+### c) How it works
 
 ```
-Push to main       → CI (tests) → CD (trigger Render deploy)
+Push to main       → CI (tests) → CD (SSH into EC2 → git pull → docker rebuild)
 Push to feature/*  → CI (tests only)
 Pull request       → CI (tests only)
 Manual trigger     → CD (from GitHub Actions tab)
 ```
 
-> **Note:** Render also auto-deploys when you push to GitHub (if auto-deploy is enabled). The GitHub Actions CD workflow adds a test gate — it only triggers the deploy after tests pass.
-
 ---
 
 ## Ongoing Operations
 
+### Deploy updates
+
+Automatic via CI/CD on push to `main`. To deploy manually:
+```bash
+cd /opt/printersrus
+./deploy/deploy.sh
+```
+
 ### View logs
-In **Render Dashboard > printersrus > Logs**
+```bash
+docker compose -f docker-compose.prod.yml logs -f          # all services
+docker compose -f docker-compose.prod.yml logs -f web       # app only
+docker compose -f docker-compose.prod.yml logs -f nginx     # nginx only
+```
 
 ### Restart
-In **Render Dashboard > printersrus > Manual Deploy > Restart**
+```bash
+docker compose -f docker-compose.prod.yml restart
+```
 
-### Redeploy
-Push to `main` (auto-deploys via CI/CD), or use **Manual Deploy > Deploy latest commit** in Render.
+### Stop
+```bash
+docker compose -f docker-compose.prod.yml down
+```
 
 ### Database backup
-Use Render's **Shell** tab:
 ```bash
-cp /app/data/printers.db /app/data/backup-$(date +%Y%m%d).db
+docker cp printersrus-web:/app/data/printers.db ./backup-$(date +%Y%m%d).db
 ```
-Or download via Render's persistent disk management.
 
-### Environment variables
-Manage in **Render Dashboard > printersrus > Environment**
+### AWS tips
+- **Elastic IP**: Attach one to keep the IP fixed across stop/start cycles (free while instance runs)
+- **Security Group**: Only ports 22, 80, 443 should be open
+- **Monitoring**: Use CloudWatch for CPU/memory alerts (free basic monitoring)
+- **Backups**: Enable EC2 automated snapshots for disaster recovery
 
 ---
 
@@ -165,21 +269,29 @@ Manage in **Render Dashboard > printersrus > Environment**
 .github/
 └── workflows/
     ├── ci.yml                # CI — runs tests on push & PR
-    └── deploy.yml            # CD — triggers Render deploy on push to main
-render.yaml                   # Render Blueprint (auto-configures the service)
+    └── deploy.yml            # CD — deploys to EC2 on push to main
+deploy/
+├── nginx/
+│   └── app.conf              # Nginx reverse proxy config
+├── setup-server.sh           # First-time server setup script
+└── deploy.sh                 # Redeploy / update script
+docker-compose.prod.yml       # Production compose (app + nginx + certbot)
 Dockerfile                    # Docker build for the Next.js app
-docker-compose.yml            # Local Docker development
 DEPLOYMENT.md                 # This file
 ```
 
 ---
 
-## Cost Summary
+## Cost Summary (AWS)
 
-| Service | Cost |
+| Resource | Cost |
 |---|---|
-| Render Starter plan | $7/month |
-| Render persistent disk (1 GB) | included |
-| SSL certificate | free (Let's Encrypt via Render) |
-| GoDaddy domain (printersrus.co.uk) | already owned |
-| **Total** | **~$7/month** |
+| EC2 t2.micro (free tier, 12 months) | $0/month |
+| EC2 t3.micro (after free tier) | ~$9/month |
+| EBS storage (20 GB gp3) | ~$1.60/month |
+| Elastic IP | free (while instance runs) |
+| SSL certificate | free (Let's Encrypt) |
+| Data transfer (first 100 GB/month) | free |
+| GoDaddy domain | already owned |
+| **Total (free tier)** | **~$1.60/month** |
+| **Total (after free tier)** | **~$11/month** |

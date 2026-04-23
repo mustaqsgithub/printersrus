@@ -21,10 +21,32 @@ jobs:
     environment: production
 
     steps:
-      - name: Trigger Render deploy
-        run: |
-          curl -s -o /dev/null -w "%{http_code}" \
-            -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}" \
-            | grep -q "200\|201" \
-            && echo "Deploy triggered successfully" \
-            || (echo "ERROR: Failed to trigger deploy" && exit 1)
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/printersrus
+
+            echo "==> Pulling latest code..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "==> Building and restarting containers..."
+            docker compose -f docker-compose.prod.yml up -d --build
+
+            echo "==> Cleaning up old images..."
+            docker image prune -f
+
+            echo "==> Verifying deployment..."
+            sleep 5
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost)
+            if [ "$STATUS" -ne 200 ] && [ "$STATUS" -ne 301 ]; then
+              echo "ERROR: Site returned HTTP $STATUS"
+              docker compose -f docker-compose.prod.yml logs --tail 30
+              exit 1
+            fi
+            echo "==> Deployment successful (HTTP $STATUS)"

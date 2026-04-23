@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────
-# PrintersRUs — GoDaddy VPS first-time server setup
-# Run as root (or with sudo) on a fresh Ubuntu 22.04+ VPS
+# PrintersRUs — AWS EC2 first-time server setup
+# Run with sudo on a fresh Ubuntu 22.04+ instance
 # ──────────────────────────────────────────────────────────────
 set -euo pipefail
 
 DOMAIN="printersrus.co.uk"
 APP_DIR="/opt/printersrus"
-REPO_URL=""  # ← set your Git repo URL here (or scp the code)
+REPO_URL="https://github.com/mustaqsgithub/printersrus.git"
 
 echo "==> Updating system packages..."
 apt-get update && apt-get upgrade -y
@@ -27,6 +27,9 @@ echo "==> Enabling Docker to start on boot..."
 systemctl enable docker
 systemctl start docker
 
+# Allow the ubuntu user to run Docker without sudo
+usermod -aG docker ubuntu 2>/dev/null || true
+
 echo "==> Setting up firewall (UFW)..."
 apt-get install -y ufw
 ufw default deny incoming
@@ -45,7 +48,7 @@ if [ -n "$REPO_URL" ]; then
   git clone "$REPO_URL" "$APP_DIR"
 else
   echo "==> No REPO_URL set. Copy your project files to $APP_DIR manually:"
-  echo "    scp -r ./* root@<your-vps-ip>:$APP_DIR/"
+  echo "    scp -i ~/.ssh/printersrus-key.pem -r ./* ubuntu@<your-ec2-ip>:$APP_DIR/"
 fi
 
 echo "==> Creating production .env file..."
