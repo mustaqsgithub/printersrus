@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createEmailVerificationToken, createSession, createUser, getUserByEmail, toAuthUser } from "@/lib/auth";
-import { setSessionCookie } from "@/lib/auth-cookies";
+import { setSessionCookie, getOrigin } from "@/lib/auth-cookies";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
   });
   const { token, expiresAt } = await createSession(user.id);
   const verification = await createEmailVerificationToken(user.id);
-  const verificationUrl = `${request.nextUrl.origin}/verify?token=${verification.token}`;
+  const verificationUrl = `${getOrigin(request)}/verify?token=${verification.token}`;
 
   const response = NextResponse.json({ user: toAuthUser(user), verificationUrl });
   setSessionCookie(response, token, expiresAt);

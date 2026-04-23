@@ -54,8 +54,42 @@ export function AdminProducts() {
   const [isLoading, setIsLoading] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
+  const [imageSearchOpen, setImageSearchOpen] = useState(false);
+  const [imageSearchQuery, setImageSearchQuery] = useState("");
+  const [imageSearchResults, setImageSearchResults] = useState<
+    Array<{ url: string; thumbnail: string; title: string }>
+  >([]);
+  const [imageSearchLoading, setImageSearchLoading] = useState(false);
   const { toast } = useToast();
   const formRef = useRef<HTMLDivElement | null>(null);
+
+  const handleImageSearch = async (query?: string) => {
+    const q = query || imageSearchQuery || form.name;
+    if (!q.trim()) {
+      toast({ title: "Enter a product name first", variant: "error" });
+      return;
+    }
+    setImageSearchQuery(q);
+    setImageSearchOpen(true);
+    setImageSearchLoading(true);
+    setImageSearchResults([]);
+    try {
+      const res = await fetch(
+        `/api/admin/image-search?q=${encodeURIComponent(q)}`
+      );
+      const data = await res.json();
+      setImageSearchResults(data.images || []);
+    } catch {
+      toast({ title: "Image search failed", variant: "error" });
+    } finally {
+      setImageSearchLoading(false);
+    }
+  };
+
+  const selectImage = (url: string) => {
+    handleChange("mainImage", url);
+    setImageSearchOpen(false);
+  };
 
   const isEditing = useMemo(() => Boolean(editingId), [editingId]);
 
@@ -389,12 +423,31 @@ export function AdminProducts() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-900 mb-1">Main Image URL</label>
-            <input
-              value={form.mainImage}
-              onChange={(event) => handleChange("mainImage", event.target.value)}
-              required
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900"
-            />
+            <div className="flex gap-2">
+              <input
+                value={form.mainImage}
+                onChange={(event) => handleChange("mainImage", event.target.value)}
+                required
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900"
+                placeholder="Paste URL or search by product name"
+              />
+              <button
+                type="button"
+                onClick={() => handleImageSearch()}
+                className="shrink-0 px-3 py-2 text-sm font-semibold bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 text-gray-700"
+                title="Search image by product name"
+              >
+                Search
+              </button>
+            </div>
+            {form.mainImage && (
+              <img
+                src={form.mainImage}
+                alt="Preview"
+                className="mt-2 h-20 w-20 rounded-md object-contain border border-gray-200 bg-white"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-900 mb-1">Stock Quantity</label>
@@ -456,6 +509,72 @@ export function AdminProducts() {
         </form>
         </div>
       </div>
+      )}
+
+      {imageSearchOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-4xl max-h-[85vh] rounded-2xl bg-white shadow-xl flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-semibold text-gray-900">Search Product Image</h3>
+              <button
+                type="button"
+                onClick={() => setImageSearchOpen(false)}
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                Close
+              </button>
+            </div>
+            <div className="flex gap-2 p-4 border-b">
+              <input
+                value={imageSearchQuery}
+                onChange={(e) => setImageSearchQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleImageSearch(imageSearchQuery); } }}
+                placeholder="Search for product images..."
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900"
+              />
+              <button
+                type="button"
+                onClick={() => handleImageSearch(imageSearchQuery)}
+                disabled={imageSearchLoading}
+                className="shrink-0 px-4 py-2 text-sm font-semibold bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-60"
+              >
+                {imageSearchLoading ? "Searching..." : "Search"}
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {imageSearchLoading && (
+                <p className="text-center text-gray-500 py-8">Searching for images...</p>
+              )}
+              {!imageSearchLoading && imageSearchResults.length === 0 && (
+                <p className="text-center text-gray-500 py-8">No images found. Try a different search term.</p>
+              )}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {imageSearchResults.map((img, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => selectImage(img.url)}
+                    className="group relative flex flex-col items-center rounded-lg border-2 border-transparent hover:border-primary-500 bg-gray-50 p-2 transition-colors"
+                    title={img.title}
+                  >
+                    <img
+                      src={img.thumbnail}
+                      alt={img.title}
+                      className="h-28 w-full rounded object-contain"
+                      loading="lazy"
+                    />
+                    <span className="mt-1 text-xs text-gray-600 line-clamp-2 text-center">
+                      {img.title}
+                    </span>
+                    <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-primary-600/80 text-white text-sm font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                      Select
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {isBulkOpen && (

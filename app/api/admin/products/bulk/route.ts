@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      let category = await dbHelpers.getCategoryBySlug(categorySlug);
+      let category = await dbHelpers.getCategoryBySlug(categorySlug) as { id: string } | null;
       if (!category) {
         if (!categoryName) {
           errors.push({ row: rowNumber, message: `Category not found: ${categorySlug}` });
@@ -103,7 +103,12 @@ export async function POST(request: NextRequest) {
           parentId: null,
         });
         createdCategories += 1;
-        category = await dbHelpers.getCategoryBySlug(categorySlug);
+        category = await dbHelpers.getCategoryBySlug(categorySlug) as { id: string } | null;
+      }
+
+      if (!category) {
+        errors.push({ row: rowNumber, message: `Failed to resolve category: ${categorySlug}` });
+        continue;
       }
 
       const stockQuantity = parseNumber(row.stockQuantity, 0);

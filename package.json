@@ -8,7 +8,15 @@
     "start": "next start",
     "lint": "next lint",
     "db:seed": "tsx scripts/seed-database.ts",
-    "db:reset": "npm run db:seed"
+    "db:reset": "npm run db:seed",
+    "test": "npx playwright test",
+    "test:smoke": "npx playwright test tests/smoke.spec.ts",
+    "test:integration": "npx playwright test tests/integration.spec.ts",
+    "test:visual": "npx playwright test tests/visual.spec.ts",
+    "test:visual:chromium": "npx playwright test tests/visual.spec.ts --project=chromium",
+    "test:visual:webkit": "npx playwright test tests/visual.spec.ts --project=webkit",
+    "test:visual:firefox": "npx playwright test tests/visual.spec.ts --project=firefox",
+    "test:applitools": "npx playwright test tests/applitools-visual.spec.ts"
   },
   "dependencies": {
     "@prisma/client": "^7.0.1",
@@ -28,12 +36,14 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@applitools/eyes-playwright": "^1.46.7",
     "@dotenvx/dotenvx": "^1.52.0",
     "@playwright/test": "^1.59.1",
     "@types/node": "^22",
     "@types/nodemailer": "^8.0.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "allure-playwright": "^3.7.1",
     "baseline-browser-mapping": "^2.9.19",
     "eslint": "^9",
     "eslint-config-next": "^16.1.1",

@@ -6,7 +6,7 @@ import {
   toAuthUser,
   updateUser,
 } from "@/lib/auth";
-import { getSessionToken } from "@/lib/auth-cookies";
+import { getSessionToken, getOrigin } from "@/lib/auth-cookies";
 
 export async function PATCH(request: NextRequest) {
   const token = await getSessionToken();
@@ -52,7 +52,7 @@ export async function PATCH(request: NextRequest) {
   let verificationUrl: string | undefined;
   if (emailChanged) {
     const verification = await createEmailVerificationToken(sessionUser.id);
-    verificationUrl = `${request.nextUrl.origin}/verify?token=${verification.token}`;
+    verificationUrl = `${getOrigin(request)}/verify?token=${verification.token}`;
   }
 
   return NextResponse.json({ user: toAuthUser(user), verificationUrl });
