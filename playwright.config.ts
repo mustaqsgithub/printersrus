@@ -2,11 +2,12 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests",
+  testIgnore: ["**/applitools-visual.spec.ts"],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0,
   workers: 1,
-  reporter: "list",
+  reporter: [["list"], ["allure-playwright"]],
   use: {
     baseURL: "http://localhost:3000",
     screenshot: "only-on-failure",
@@ -16,6 +17,14 @@ export default defineConfig({
     {
       name: "chromium",
       use: { browserName: "chromium" },
+    },
+    {
+      name: "webkit",
+      use: { browserName: "webkit" },
+    },
+    {
+      name: "firefox",
+      use: { browserName: "firefox" },
     },
   ],
   webServer: {

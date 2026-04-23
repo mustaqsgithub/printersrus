@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createEmailVerificationToken, getSessionUser, toAuthUser } from "@/lib/auth";
-import { getSessionToken } from "@/lib/auth-cookies";
+import { getSessionToken, getOrigin } from "@/lib/auth-cookies";
 
 export async function POST(request: NextRequest) {
   const token = await getSessionToken();
@@ -18,6 +18,6 @@ export async function POST(request: NextRequest) {
   }
 
   const verification = await createEmailVerificationToken(user.id);
-  const verificationUrl = `${request.nextUrl.origin}/verify?token=${verification.token}`;
+  const verificationUrl = `${getOrigin(request)}/verify?token=${verification.token}`;
   return NextResponse.json({ user: toAuthUser(user), verificationUrl });
 }

@@ -1,10 +1,25 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle, Mail } from "lucide-react";
 
 export default function CheckoutSuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto px-4 py-16 bg-white">
+        <div className="max-w-2xl mx-auto text-center">
+          <p className="text-gray-900">Loading order details...</p>
+        </div>
+      </div>
+    }>
+      <CheckoutSuccessInner />
+    </Suspense>
+  );
+}
+
+function CheckoutSuccessInner() {
   const searchParams = useSearchParams();
   const orderId = searchParams.get("orderId");
   const orderNumber = searchParams.get("orderNumber");

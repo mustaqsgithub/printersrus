@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { 
@@ -24,6 +24,22 @@ import {
 import { useAuthStore } from "@/lib/auth-store";
 
 export default function AccountPage() {
+  return (
+    <Suspense fallback={
+      <div className="bg-white min-h-screen">
+        <div className="container mx-auto px-4 py-16">
+          <div className="max-w-2xl mx-auto text-center">
+            <p className="text-gray-900">Loading your account...</p>
+          </div>
+        </div>
+      </div>
+    }>
+      <AccountPageInner />
+    </Suspense>
+  );
+}
+
+function AccountPageInner() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'addresses' | 'settings' | 'notifications'>('overview');

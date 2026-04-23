@@ -6,7 +6,7 @@ import {
   toAuthUser,
   verifyPassword,
 } from "@/lib/auth";
-import { setSessionCookie } from "@/lib/auth-cookies";
+import { setSessionCookie, getOrigin } from "@/lib/auth-cookies";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
 
   if (!user.email_verified_at) {
     const verification = await createEmailVerificationToken(user.id);
-    const verificationUrl = `${request.nextUrl.origin}/verify?token=${verification.token}`;
+    const verificationUrl = `${getOrigin(request)}/verify?token=${verification.token}`;
     return NextResponse.json(
       { message: "Please verify your email before signing in.", verificationUrl },
       { status: 403 }
