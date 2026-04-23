@@ -1,0 +1,27 @@
+# https://docs.render.com/blueprint-spec
+services:
+  - type: web
+    name: printersrus
+    runtime: docker
+    plan: starter # $7/mo — persistent disk, no cold starts
+    region: frankfurt # closest to UK
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_BASE_URL
+        value: https://printersrus.co.uk
+      - key: BASE_URL
+        value: https://printersrus.co.uk
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: NEXT_PUBLIC_STORE_NAME
+        value: PrintersRUs
+      - key: NEXT_PUBLIC_STORE_DESCRIPTION
+        value: "Your one-stop shop for printers, ink & accessories"
+      - key: ADMIN_SETUP_KEY
+        generateValue: true # Render generates a random value
+    disk:
+      name: printersrus-data
+      mountPath: /app/data
+      sizeGB: 1
