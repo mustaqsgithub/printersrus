@@ -1,95 +1,132 @@
-# PrintersRUs — GoDaddy VPS Deployment Guide
+# PrintersRUs — AWS EC2 + GoDaddy Domain Deployment Guide
 
-## 1. Purchase a GoDaddy VPS
+## Architecture
 
-Go to **GoDaddy > Hosting > VPS** and choose:
+```
+GoDaddy DNS (printersrus.co.uk)  →  AWS EC2 (Ubuntu)
+                                      ├── Nginx (reverse proxy + SSL)
+                                      ├── Next.js app (Docker)
+                                      └── SQLite (persistent volume)
+```
 
-| Spec | Minimum | Recommended |
-|---|---|---|
-| OS | **Ubuntu 22.04 LTS** | Ubuntu 22.04 LTS |
-| RAM | 2 GB | 4 GB |
-| CPU | 1 vCPU | 2 vCPU |
-| Storage | 40 GB SSD | 80 GB SSD |
-| Plan | Standard VPS (~$10/mo) | High Performance VPS |
-
-> **Important:** Choose **Self-Managed Linux VPS** (not WordPress or cPanel hosting).
-
-After purchase you'll receive:
-- **Server IP address** (e.g. `192.0.2.10`)
-- **Root SSH credentials**
+**Estimated cost:** ~$9/month (EC2 t3.micro with free tier, or ~$4/month after)
 
 ---
 
-## 2. Point Your Domain to the VPS
+## 1. Create an AWS Account
 
-In **GoDaddy DNS Manager** for `printersrus.co.uk`:
+1. Go to **https://aws.amazon.com** and click **Create an AWS Account**
+2. Enter your email, set a password, provide billing info
+3. Choose the **Free Tier** — includes a `t2.micro` instance free for 12 months
+
+---
+
+## 2. Launch an EC2 Instance
+
+### a) Open EC2 Dashboard
+
+1. Log in to **AWS Console**: https://console.aws.amazon.com
+2. Search for **EC2** and open it
+3. Click **Launch Instance**
+
+### b) Configure the instance
+
+| Setting | Value |
+|---|---|
+| **Name** | `printersrus` |
+| **AMI** | Ubuntu Server 24.04 LTS (free tier eligible) |
+| **Instance type** | `t2.micro` (free tier) or `t3.small` (recommended) |
+| **Key pair** | Create new → name it `printersrus-key` → download the `.pem` file |
+| **Network settings** | Allow SSH (22), HTTP (80), HTTPS (443) from anywhere |
+| **Storage** | 20 GB gp3 (default is fine) |
+
+### c) Launch and note the public IP
+
+After launch, go to **Instances** and note the **Public IPv4 address** (e.g. `3.10.45.123`).
+
+### d) Save your key file
+
+```bash
+# Move the downloaded key to your SSH directory
+mv ~/Downloads/printersrus-key.pem ~/.ssh/
+chmod 400 ~/.ssh/printersrus-key.pem
+```
+
+---
+
+## 3. Point Your GoDaddy Domain to EC2
+
+In the **GoDaddy DNS Manager** for `printersrus.co.uk`:
 
 | Type | Name | Value | TTL |
 |---|---|---|---|
-| A | @ | `<your-vps-ip>` | 600 |
-| A | www | `<your-vps-ip>` | 600 |
+| **A** | `@` | `<your-ec2-ip>` | 600 |
+| **A** | `www` | `<your-ec2-ip>` | 600 |
 
-Replace `<your-vps-ip>` with the IP from step 1. DNS changes take 5-30 minutes to propagate.
+Replace `<your-ec2-ip>` with the public IP from step 2. DNS propagation takes 5-30 minutes.
+
+> **Tip:** Consider attaching an **Elastic IP** in AWS so the IP doesn't change if you stop/start the instance. It's free while the instance is running.
 
 ---
 
-## 3. Set Up the Server
+## 4. Set Up the Server
 
-SSH into your VPS:
-
-```bash
-ssh root@<your-vps-ip>
-```
-
-### Option A: Automated setup
-
-Upload and run the setup script:
+### a) SSH into the instance
 
 ```bash
-# From your local machine
-scp -r ./* root@<your-vps-ip>:/opt/printersrus/
-
-# On the VPS
-chmod +x /opt/printersrus/deploy/setup-server.sh
-/opt/printersrus/deploy/setup-server.sh
+ssh -i ~/.ssh/printersrus-key.pem ubuntu@<your-ec2-ip>
 ```
 
-### Option B: Manual setup
+### b) Run the automated setup script
+
+From your **local machine**, copy the project files to the server:
+
+```bash
+scp -i ~/.ssh/printersrus-key.pem -r ./* ubuntu@<your-ec2-ip>:/tmp/printersrus/
+```
+
+Then on the **server**:
+
+```bash
+sudo mkdir -p /opt/printersrus
+sudo cp -r /tmp/printersrus/* /opt/printersrus/
+sudo chown -R ubuntu:ubuntu /opt/printersrus
+cd /opt/printersrus
+chmod +x deploy/setup-server.sh
+sudo deploy/setup-server.sh
+```
+
+### c) Or set up manually
 
 ```bash
 # Install Docker
-curl -fsSL https://get.docker.com | sh
-systemctl enable docker && systemctl start docker
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker ubuntu
+newgrp docker
 
-# Firewall
-ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp && ufw --force enable
-
-# Copy project
-mkdir -p /opt/printersrus
-```
-
-Then from your local machine:
-```bash
-scp -r ./* root@<your-vps-ip>:/opt/printersrus/
+# Verify
+docker --version
 ```
 
 ---
 
-## 4. Configure Environment
-
-On the VPS, create the `.env` file:
+## 5. Configure Environment
 
 ```bash
 cd /opt/printersrus
+
+# Generate a secure admin setup key
 cat > .env <<EOF
 ADMIN_SETUP_KEY=$(openssl rand -hex 24)
 EOF
-cat .env   # note down the ADMIN_SETUP_KEY
+
+# Note down the key — you'll need it later
+cat .env
 ```
 
 ---
 
-## 5. Build & Start the Application
+## 6. Build & Start the Application
 
 ```bash
 cd /opt/printersrus
@@ -104,7 +141,7 @@ curl -I http://localhost
 
 ---
 
-## 6. Obtain SSL Certificate (HTTPS)
+## 7. Obtain SSL Certificate (HTTPS)
 
 Once DNS has propagated (verify with `dig printersrus.co.uk`):
 
@@ -117,11 +154,11 @@ docker compose -f docker-compose.prod.yml run --rm certbot \
 
 ---
 
-## 7. Enable HTTPS in Nginx
+## 8. Enable HTTPS in Nginx
 
 Edit `deploy/nginx/app.conf`:
 
-1. **Uncomment** the entire `server { listen 443 ... }` block (remove the `#` prefixes)
+1. **Uncomment** the entire `server { listen 443 ... }` block (remove all the `#` prefixes)
 2. Save the file
 
 Reload Nginx:
@@ -133,17 +170,17 @@ Your site is now live at **https://printersrus.co.uk**
 
 ---
 
-## 8. Set Up the Admin Account
+## 9. Set Up the Admin Account
 
 Visit `https://printersrus.co.uk/admin/setup` and enter:
 - Your name, email, password
-- The **ADMIN_SETUP_KEY** from step 4
+- The **ADMIN_SETUP_KEY** from step 5
 
 ---
 
-## 9. SSL Auto-Renewal
+## 10. SSL Auto-Renewal
 
-The `certbot` container automatically renews certificates every 12 hours (no action needed). To test renewal manually:
+The `certbot` container automatically renews certificates every 12 hours. To test:
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm certbot renew --dry-run
@@ -151,68 +188,38 @@ docker compose -f docker-compose.prod.yml run --rm certbot renew --dry-run
 
 ---
 
-## 10. Set Up CI/CD (GitHub Actions)
+## 11. Set Up CI/CD (GitHub Actions)
 
-The project includes two workflows:
+### a) Clone the repo on EC2
 
-- **CI** (`.github/workflows/ci.yml`) — runs smoke + integration tests on every push and PR
-- **CD** (`.github/workflows/deploy.yml`) — tests then auto-deploys to production on push to `main`
-
-### a) Clone the repo on the VPS
-
-On the VPS, replace the scp'd files with a proper git clone so the CD pipeline can `git pull`:
+Replace the copied files with a proper git clone:
 
 ```bash
 cd /opt
-rm -rf printersrus
-git clone git@github.com:<your-username>/printers-e-commerce.git printersrus
+sudo rm -rf printersrus
+git clone https://github.com/mustaqsgithub/printersrus.git printersrus
 cp /path/to/your/.env printersrus/.env
-docker compose -f printersrus/docker-compose.prod.yml up -d --build
+cd printersrus
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-### b) Generate an SSH deploy key
+### b) Add GitHub Secrets
 
-On your **local machine**:
-
-```bash
-ssh-keygen -t ed25519 -C "github-deploy" -f ~/.ssh/printersrus_deploy -N ""
-```
-
-Then:
-- Copy the **public** key to your VPS:
-  ```bash
-  ssh-copy-id -i ~/.ssh/printersrus_deploy.pub root@<your-vps-ip>
-  ```
-- Copy the **private** key content — you'll paste it into GitHub in the next step:
-  ```bash
-  cat ~/.ssh/printersrus_deploy
-  ```
-
-### c) Add GitHub Secrets
-
-Go to your repo on GitHub: **Settings > Secrets and variables > Actions > New repository secret**
+Go to your repo: **Settings > Secrets and variables > Actions > New repository secret**
 
 | Secret | Value |
 |---|---|
-| `VPS_HOST` | Your VPS IP address (e.g. `192.0.2.10`) |
-| `VPS_USER` | `root` (or your deploy user) |
-| `VPS_SSH_KEY` | Contents of `~/.ssh/printersrus_deploy` (the private key) |
+| `EC2_HOST` | Your EC2 public IP (e.g. `3.10.45.123`) |
+| `EC2_SSH_KEY` | Contents of `~/.ssh/printersrus-key.pem` |
 
-### d) Create a GitHub Environment
-
-Go to **Settings > Environments > New environment**, name it `production`. Optionally add:
-- **Required reviewers** — for manual approval before deploy
-- **Wait timer** — delay before deploy starts
-
-### e) How it works
+### c) How it works
 
 ```
-Push to main → CI (tests) → CD (SSH into VPS → git pull → docker rebuild)
-Push to feature/* → CI (tests only)
-Pull request → CI (tests only)
+Push to main       → CI (tests) → CD (SSH into EC2 → git pull → docker rebuild)
+Push to feature/*  → CI (tests only)
+Pull request       → CI (tests only)
+Manual trigger     → CD (from GitHub Actions tab)
 ```
-
-You can also trigger a deploy manually from the **Actions** tab using "Run workflow".
 
 ---
 
@@ -220,7 +227,7 @@ You can also trigger a deploy manually from the **Actions** tab using "Run workf
 
 ### Deploy updates
 
-Automatic via CI/CD on push to `main`. To deploy manually on the VPS:
+Automatic via CI/CD on push to `main`. To deploy manually:
 ```bash
 cd /opt/printersrus
 ./deploy/deploy.sh
@@ -248,6 +255,12 @@ docker compose -f docker-compose.prod.yml down
 docker cp printersrus-web:/app/data/printers.db ./backup-$(date +%Y%m%d).db
 ```
 
+### AWS tips
+- **Elastic IP**: Attach one to keep the IP fixed across stop/start cycles (free while instance runs)
+- **Security Group**: Only ports 22, 80, 443 should be open
+- **Monitoring**: Use CloudWatch for CPU/memory alerts (free basic monitoring)
+- **Backups**: Enable EC2 automated snapshots for disaster recovery
+
 ---
 
 ## File Structure
@@ -256,12 +269,29 @@ docker cp printersrus-web:/app/data/printers.db ./backup-$(date +%Y%m%d).db
 .github/
 └── workflows/
     ├── ci.yml                # CI — runs tests on push & PR
-    └── deploy.yml            # CD — deploys to VPS on push to main
+    └── deploy.yml            # CD — deploys to EC2 on push to main
 deploy/
 ├── nginx/
 │   └── app.conf              # Nginx reverse proxy config
-├── setup-server.sh           # First-time VPS setup script
+├── setup-server.sh           # First-time server setup script
 └── deploy.sh                 # Redeploy / update script
 docker-compose.prod.yml       # Production compose (app + nginx + certbot)
+Dockerfile                    # Docker build for the Next.js app
 DEPLOYMENT.md                 # This file
 ```
+
+---
+
+## Cost Summary (AWS)
+
+| Resource | Cost |
+|---|---|
+| EC2 t2.micro (free tier, 12 months) | $0/month |
+| EC2 t3.micro (after free tier) | ~$9/month |
+| EBS storage (20 GB gp3) | ~$1.60/month |
+| Elastic IP | free (while instance runs) |
+| SSL certificate | free (Let's Encrypt) |
+| Data transfer (first 100 GB/month) | free |
+| GoDaddy domain | already owned |
+| **Total (free tier)** | **~$1.60/month** |
+| **Total (after free tier)** | **~$11/month** |
