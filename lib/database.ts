@@ -97,6 +97,7 @@ export async function initDatabase() {
         password_hash TEXT NOT NULL,
         role TEXT DEFAULT 'customer',
         email_verified_at TEXT,
+        email_notifications INTEGER DEFAULT 1,
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now'))
       )
