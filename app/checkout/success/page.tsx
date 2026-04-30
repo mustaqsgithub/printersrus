@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle, Mail } from "lucide-react";
+import { CheckCircle, Mail, AlertTriangle } from "lucide-react";
 
 export default function CheckoutSuccessPage() {
   return (
@@ -24,6 +24,7 @@ function CheckoutSuccessInner() {
   const orderId = searchParams.get("orderId");
   const orderNumber = searchParams.get("orderNumber");
   const emailPreview = searchParams.get("emailPreview");
+  const emailFailed = searchParams.get("emailFailed") === "1";
 
   return (
     <div className="container mx-auto px-4 py-16 bg-white">
@@ -36,8 +37,21 @@ function CheckoutSuccessInner() {
 
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 mb-8">
           <p className="text-gray-900 mb-4">
-            A confirmation email has been sent with your order details and tracking information.
+            {emailFailed
+              ? "We were unable to send a confirmation email. Your order has been placed successfully — you can view your order details below."
+              : "A confirmation email has been sent with your order details and tracking information."}
           </p>
+          {emailFailed && (
+            <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <AlertTriangle size={18} className="text-amber-600" />
+                <p className="text-sm font-semibold text-amber-800">Email could not be sent</p>
+              </div>
+              <p className="text-sm text-amber-700">
+                Please check your order details using the button below. If you need a copy of your confirmation, contact support.
+              </p>
+            </div>
+          )}
           {orderNumber && (
             <p className="text-sm text-gray-900 mb-4">
               Order Number: <strong>#{orderNumber}</strong>

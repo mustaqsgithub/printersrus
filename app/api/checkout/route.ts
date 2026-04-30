@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Send order confirmation email
-    const emailPreviewUrl = await sendOrderConfirmationEmail({
+    const emailResult = await sendOrderConfirmationEmail({
       orderNumber,
       orderId,
       customerName: `${customer.firstName} ${customer.lastName}`,
@@ -151,7 +151,16 @@ export async function POST(request: NextRequest) {
       shippingAddress,
     });
 
-    return NextResponse.json({ orderId, orderNumber, emailPreviewUrl });
+    if (!emailResult.success) {
+      console.error(`[CHECKOUT] Email failed for order ${orderNumber}: ${emailResult.error}`);
+    }
+
+    return NextResponse.json({
+      orderId,
+      orderNumber,
+      emailPreviewUrl: emailResult.previewUrl || null,
+      emailSent: emailResult.success,
+    });
   } catch (error) {
     console.error("Checkout error:", error);
     return NextResponse.json({ message: "Checkout failed." }, { status: 500 });
