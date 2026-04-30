@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createEmailVerificationToken, createSession, createUser, getUserByEmail, toAuthUser } from "@/lib/auth";
 import { setSessionCookie, getOrigin } from "@/lib/auth-cookies";
+import { sendVerificationEmail } from "@/lib/email";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
@@ -28,6 +29,16 @@ export async function POST(request: NextRequest) {
   const { token, expiresAt } = await createSession(user.id);
   const verification = await createEmailVerificationToken(user.id);
   const verificationUrl = `${getOrigin(request)}/verify?token=${verification.token}`;
+
+  // Send verification email
+  const emailResult = await sendVerificationEmail({
+    recipientEmail: user.email,
+    recipientName: user.first_name,
+    verificationUrl,
+  });
+  if (!emailResult.success) {
+    console.error(`[SIGNUP] Verification email failed for ${user.email}: ${emailResult.error}`);
+  }
 
   const response = NextResponse.json({ user: toAuthUser(user), verificationUrl });
   setSessionCookie(response, token, expiresAt);

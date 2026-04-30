@@ -7,6 +7,7 @@ import {
   verifyPassword,
 } from "@/lib/auth";
 import { setSessionCookie, getOrigin } from "@/lib/auth-cookies";
+import { sendVerificationEmail } from "@/lib/email";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
@@ -27,8 +28,19 @@ export async function POST(request: NextRequest) {
   if (!user.email_verified_at) {
     const verification = await createEmailVerificationToken(user.id);
     const verificationUrl = `${getOrigin(request)}/verify?token=${verification.token}`;
+
+    // Re-send verification email
+    const emailResult = await sendVerificationEmail({
+      recipientEmail: user.email,
+      recipientName: user.first_name,
+      verificationUrl,
+    });
+    if (!emailResult.success) {
+      console.error(`[LOGIN] Verification email failed for ${user.email}: ${emailResult.error}`);
+    }
+
     return NextResponse.json(
-      { message: "Please verify your email before signing in.", verificationUrl },
+      { message: "Please verify your email before signing in. A new verification email has been sent.", verificationUrl },
       { status: 403 }
     );
   }

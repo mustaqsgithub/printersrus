@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createEmailVerificationToken, getSessionUser, toAuthUser } from "@/lib/auth";
 import { getSessionToken, getOrigin } from "@/lib/auth-cookies";
+import { sendVerificationEmail } from "@/lib/email";
 
 export async function POST(request: NextRequest) {
   const token = await getSessionToken();
@@ -19,5 +20,16 @@ export async function POST(request: NextRequest) {
 
   const verification = await createEmailVerificationToken(user.id);
   const verificationUrl = `${getOrigin(request)}/verify?token=${verification.token}`;
+
+  // Send verification email
+  const emailResult = await sendVerificationEmail({
+    recipientEmail: user.email,
+    recipientName: user.first_name,
+    verificationUrl,
+  });
+  if (!emailResult.success) {
+    console.error(`[RESEND] Verification email failed for ${user.email}: ${emailResult.error}`);
+  }
+
   return NextResponse.json({ user: toAuthUser(user), verificationUrl });
 }
