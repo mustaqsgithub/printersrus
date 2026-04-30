@@ -222,6 +222,23 @@ export async function initDatabase() {
       )
     `);
 
+    // Add Stripe token columns if missing (additive migration)
+    const pmCols = db.prepare(`PRAGMA table_info(payment_methods)`).all() as Array<{ name: string }>;
+    const colNames = new Set(pmCols.map((c) => c.name));
+    if (!colNames.has("stripe_payment_method_id")) {
+      db.exec(`ALTER TABLE payment_methods ADD COLUMN stripe_payment_method_id TEXT`);
+    }
+    if (!colNames.has("stripe_customer_id")) {
+      db.exec(`ALTER TABLE payment_methods ADD COLUMN stripe_customer_id TEXT`);
+    }
+
+    // Add stripe_customer_id to users table if missing
+    const userCols = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
+    const userColNames = new Set(userCols.map((c) => c.name));
+    if (!userColNames.has("stripe_customer_id")) {
+      db.exec(`ALTER TABLE users ADD COLUMN stripe_customer_id TEXT`);
+    }
+
     console.log('Database initialized successfully!');
   } catch (error) {
     console.error('Error initializing database:', error);
@@ -388,8 +405,9 @@ export const dbHelpers = {
       INSERT INTO orders (
         id, order_number, customer_email, customer_name, customer_phone,
         shipping_address, billing_address, subtotal, tax_amount,
-        shipping_amount, discount_amount, total_amount, status, payment_status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        shipping_amount, discount_amount, total_amount, status, payment_status,
+        payment_method, payment_intent_id, paid_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       order.id,
       order.orderNumber,
@@ -404,7 +422,10 @@ export const dbHelpers = {
       order.discountAmount || 0,
       order.totalAmount,
       order.status || "pending",
-      order.paymentStatus || "pending"
+      order.paymentStatus || "pending",
+      order.paymentMethod || null,
+      order.paymentReference || null,
+      order.paymentStatus === "paid" ? new Date().toISOString() : null,
     );
   },
 
@@ -653,6 +674,62 @@ export const dbHelpers = {
     const db = getDb();
     db.prepare(`UPDATE payment_methods SET is_default = 0 WHERE user_id = ?`).run(userId);
     db.prepare(`UPDATE payment_methods SET is_default = 1 WHERE id = ? AND user_id = ?`).run(id, userId);
+  },
+
+  // Stripe token-based payment methods
+  addStripePaymentMethod: async (pm: {
+    userId: string;
+    stripePaymentMethodId: string;
+    stripeCustomerId: string;
+    cardType: string;
+    lastFour: string;
+    expiryMonth: number;
+    expiryYear: number;
+    cardholderName: string;
+  }) => {
+    const db = getDb();
+    const id = crypto.randomUUID();
+    const existing = db.prepare(
+      `SELECT COUNT(*) as count FROM payment_methods WHERE user_id = ?`
+    ).get(pm.userId) as any;
+    const isDefault = existing.count === 0 ? 1 : 0;
+    db.prepare(`
+      INSERT INTO payment_methods
+        (id, user_id, card_type, last_four, expiry_month, expiry_year, cardholder_name,
+         is_default, stripe_payment_method_id, stripe_customer_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      pm.userId,
+      pm.cardType,
+      pm.lastFour,
+      pm.expiryMonth,
+      pm.expiryYear,
+      pm.cardholderName,
+      isDefault,
+      pm.stripePaymentMethodId,
+      pm.stripeCustomerId,
+    );
+    return id;
+  },
+
+  getPaymentMethodById: async (id: string, userId: string) => {
+    const db = getDb();
+    return db.prepare(
+      `SELECT * FROM payment_methods WHERE id = ? AND user_id = ?`
+    ).get(id, userId);
+  },
+
+  // Stripe customer linkage on users
+  getUserStripeCustomerId: async (userId: string): Promise<string | null> => {
+    const db = getDb();
+    const row = db.prepare(`SELECT stripe_customer_id FROM users WHERE id = ?`).get(userId) as any;
+    return row?.stripe_customer_id || null;
+  },
+
+  setUserStripeCustomerId: async (userId: string, stripeCustomerId: string) => {
+    const db = getDb();
+    db.prepare(`UPDATE users SET stripe_customer_id = ? WHERE id = ?`).run(stripeCustomerId, userId);
   },
 };
 

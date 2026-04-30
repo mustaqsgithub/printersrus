@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { initDatabase, dbHelpers } from "@/lib/database";
 import { getDb } from "@/lib/db";
 import { sendOrderConfirmationEmail } from "@/lib/email";
+import { priceCart } from "@/lib/pricing";
+import { getStripe, toMinorUnits } from "@/lib/stripe";
+import { getPaypalOrder } from "@/lib/paypal";
 import crypto from "crypto";
 
 interface AddressInput {
@@ -24,7 +27,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Invalid request body." }, { status: 400 });
     }
 
-    const { customer, shippingAddress, billingAddress, items } = body;
+    const { customer, shippingAddress, billingAddress, items, payment } = body;
 
     if (!customer?.email || !customer?.firstName || !customer?.lastName) {
       return NextResponse.json({ message: "Missing customer information." }, { status: 400 });
@@ -35,49 +38,67 @@ export async function POST(request: NextRequest) {
     if (!items || items.length === 0) {
       return NextResponse.json({ message: "No items in order." }, { status: 400 });
     }
+    if (!payment?.provider) {
+      return NextResponse.json({ message: "Missing payment information." }, { status: 400 });
+    }
 
     await initDatabase();
     const db = getDb();
 
-    // Look up products and calculate totals
-    let subtotal = 0;
-    const orderItems: Array<{
-      productId: string;
-      productName: string;
-      productSku: string;
-      productImage: string;
-      quantity: number;
-      price: number;
-      totalPrice: number;
-    }> = [];
+    // Server-side pricing — never trust the client
+    const priced = await priceCart(items);
 
-    for (const item of items) {
-      const product = await dbHelpers.getProductById(item.productId);
-      if (!product) {
+    // Verify payment with the provider before creating the order
+    let paymentReference: string;
+    let paymentMethod: string;
+
+    if (payment.provider === "stripe") {
+      if (!payment.paymentIntentId) {
+        return NextResponse.json({ message: "Missing paymentIntentId." }, { status: 400 });
+      }
+      const stripe = getStripe();
+      const intent = await stripe.paymentIntents.retrieve(payment.paymentIntentId);
+      if (intent.status !== "succeeded") {
         return NextResponse.json(
-          { message: `Product not found: ${item.productId}` },
+          { message: `Payment not completed (status: ${intent.status}).` },
           { status: 400 }
         );
       }
-      const p = product as any;
-      const unitPrice = p.sale_price || p.price;
-      const lineTotal = unitPrice * item.quantity;
-      subtotal += lineTotal;
-
-      orderItems.push({
-        productId: p.id,
-        productName: p.name,
-        productSku: p.sku,
-        productImage: p.main_image,
-        quantity: item.quantity,
-        price: unitPrice,
-        totalPrice: lineTotal,
-      });
+      const expected = toMinorUnits(priced.totalAmount, priced.currency);
+      if (intent.amount !== expected || intent.currency !== priced.currency) {
+        return NextResponse.json(
+          { message: "Payment amount/currency mismatch." },
+          { status: 400 }
+        );
+      }
+      paymentReference = intent.id;
+      paymentMethod = "stripe";
+    } else if (payment.provider === "paypal") {
+      if (!payment.paypalOrderId) {
+        return NextResponse.json({ message: "Missing paypalOrderId." }, { status: 400 });
+      }
+      const order = await getPaypalOrder(payment.paypalOrderId);
+      if (order.status !== "COMPLETED") {
+        return NextResponse.json(
+          { message: `PayPal order not completed (status: ${order.status}).` },
+          { status: 400 }
+        );
+      }
+      const unit = order.purchase_units?.[0];
+      const captured = unit?.payments?.captures?.[0];
+      const amountValue = parseFloat(captured?.amount?.value || unit?.amount?.value || "0");
+      const currency = (captured?.amount?.currency_code || unit?.amount?.currency_code || "").toLowerCase();
+      if (Math.abs(amountValue - priced.totalAmount) > 0.01 || currency !== priced.currency) {
+        return NextResponse.json(
+          { message: "Payment amount/currency mismatch." },
+          { status: 400 }
+        );
+      }
+      paymentReference = order.id;
+      paymentMethod = "paypal";
+    } else {
+      return NextResponse.json({ message: "Unsupported payment provider." }, { status: 400 });
     }
-
-    const shippingAmount = subtotal > 50 ? 0 : 8.99;
-    const taxAmount = subtotal * 0.08;
-    const totalAmount = subtotal + shippingAmount + taxAmount;
 
     const orderId = crypto.randomUUID();
     const orderNumber = `PR-${Date.now().toString(36).toUpperCase()}`;
@@ -91,14 +112,16 @@ export async function POST(request: NextRequest) {
       customerPhone: customer.phone || null,
       shippingAddress: formatAddress(shippingAddress),
       billingAddress: formatAddress(billingAddress || shippingAddress),
-      subtotal,
-      taxAmount,
-      shippingAmount,
+      subtotal: priced.subtotal,
+      taxAmount: priced.taxAmount,
+      shippingAmount: priced.shippingAmount,
       discountAmount: 0,
-      totalAmount,
+      totalAmount: priced.totalAmount,
       status: "pending",
       paymentStatus: "paid",
-    });
+      paymentMethod,
+      paymentReference,
+    } as any);
 
     // Insert order items
     const insertItem = db.prepare(`
@@ -106,7 +129,7 @@ export async function POST(request: NextRequest) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    for (const oi of orderItems) {
+    for (const oi of priced.items) {
       insertItem.run(
         crypto.randomUUID(),
         orderId,
@@ -121,14 +144,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Send order confirmation notification
-    const itemSummary = orderItems.length === 1
-      ? orderItems[0].productName
-      : `${orderItems[0].productName} and ${orderItems.length - 1} other item(s)`;
+    const itemSummary = priced.items.length === 1
+      ? priced.items[0].productName
+      : `${priced.items[0].productName} and ${priced.items.length - 1} other item(s)`;
     await dbHelpers.createNotification({
       userEmail: customer.email,
       type: "order_placed",
       title: "Order Confirmed",
-      message: `Your order ${orderNumber} for ${itemSummary} has been placed. Total: £${totalAmount.toFixed(2)}`,
+      message: `Your order ${orderNumber} for ${itemSummary} has been placed. Total: £${priced.totalAmount.toFixed(2)}`,
       orderId,
     });
 
@@ -138,16 +161,16 @@ export async function POST(request: NextRequest) {
       orderId,
       customerName: `${customer.firstName} ${customer.lastName}`,
       customerEmail: customer.email,
-      items: orderItems.map((oi) => ({
+      items: priced.items.map((oi) => ({
         productName: oi.productName,
         quantity: oi.quantity,
         price: oi.price,
         totalPrice: oi.totalPrice,
       })),
-      subtotal,
-      shippingAmount,
-      taxAmount,
-      totalAmount,
+      subtotal: priced.subtotal,
+      shippingAmount: priced.shippingAmount,
+      taxAmount: priced.taxAmount,
+      totalAmount: priced.totalAmount,
       shippingAddress,
     });
 

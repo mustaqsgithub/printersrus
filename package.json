@@ -19,7 +19,11 @@
     "test:applitools": "npx playwright test tests/applitools-visual.spec.ts"
   },
   "dependencies": {
+    "@paypal/paypal-server-sdk": "^2.3.0",
+    "@paypal/react-paypal-js": "^9.2.0",
     "@prisma/client": "^7.0.1",
+    "@stripe/react-stripe-js": "^6.3.0",
+    "@stripe/stripe-js": "^9.3.1",
     "@types/better-sqlite3": "^7.6.13",
     "autoprefixer": "^10.4.22",
     "bcryptjs": "^3.0.3",
@@ -33,6 +37,7 @@
     "prisma": "^7.0.1",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "stripe": "^22.1.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
