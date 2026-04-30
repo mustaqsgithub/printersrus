@@ -171,11 +171,12 @@ export default function CheckoutPage() {
         return;
       }
 
-      const { orderId, orderNumber, emailPreviewUrl } = await res.json();
+      const { orderId, orderNumber, emailPreviewUrl, emailSent } = await res.json();
       clearCart();
       setIsProcessing(false);
       const params = new URLSearchParams({ orderId, orderNumber });
       if (emailPreviewUrl) params.set("emailPreview", emailPreviewUrl);
+      if (emailSent === false) params.set("emailFailed", "1");
       router.push(`/checkout/success?${params.toString()}`);
     } catch {
       alert("Something went wrong. Please try again.");

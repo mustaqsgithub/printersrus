@@ -1,9 +1,10 @@
 import nodemailer from "nodemailer";
 
 let _transporter: nodemailer.Transporter | null = null;
+let _transporterVerified = false;
 
 async function getTransporter(): Promise<nodemailer.Transporter> {
-  if (_transporter) return _transporter;
+  if (_transporter && _transporterVerified) return _transporter;
 
   // Use real SMTP if configured
   if (process.env.SMTP_HOST) {
@@ -16,20 +17,34 @@ async function getTransporter(): Promise<nodemailer.Transporter> {
         pass: process.env.SMTP_PASS,
       },
     });
-    return _transporter;
+  } else {
+    // Use Ethereal test account for development
+    console.log("[EMAIL] No SMTP configured – creating Ethereal test account...");
+    const testAccount = await nodemailer.createTestAccount();
+    _transporter = nodemailer.createTransport({
+      host: testAccount.smtp.host,
+      port: testAccount.smtp.port,
+      secure: testAccount.smtp.secure,
+      auth: {
+        user: testAccount.user,
+        pass: testAccount.pass,
+      },
+    });
+    console.log("[EMAIL] Ethereal test account ready (emails won't be delivered to real recipients)");
   }
 
-  // Use Ethereal test account for development
-  const testAccount = await nodemailer.createTestAccount();
-  _transporter = nodemailer.createTransport({
-    host: testAccount.smtp.host,
-    port: testAccount.smtp.port,
-    secure: testAccount.smtp.secure,
-    auth: {
-      user: testAccount.user,
-      pass: testAccount.pass,
-    },
-  });
+  // Verify the connection works
+  try {
+    await _transporter.verify();
+    _transporterVerified = true;
+    console.log("[EMAIL] SMTP connection verified successfully");
+  } catch (verifyError) {
+    _transporter = null;
+    _transporterVerified = false;
+    const msg = verifyError instanceof Error ? verifyError.message : String(verifyError);
+    throw new Error(`SMTP connection failed: ${msg}`);
+  }
+
   return _transporter;
 }
 
@@ -195,30 +210,63 @@ View your order: ${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/
 PrintersRUs - Your trusted source for printers and supplies`;
 }
 
-export async function sendOrderConfirmationEmail(data: OrderEmailData): Promise<string | null> {
-  try {
-    const transporter = await getTransporter();
+export interface EmailResult {
+  success: boolean;
+  previewUrl?: string;
+  messageId?: string;
+  error?: string;
+}
 
-    const info = await transporter.sendMail({
-      from: FROM_ADDRESS,
-      to: data.customerEmail,
-      subject: `Order Confirmed - #${data.orderNumber}`,
-      text: buildOrderConfirmationText(data),
-      html: buildOrderConfirmationHtml(data),
-    });
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1000;
 
-    // In development with Ethereal, log the preview URL
-    const previewUrl = nodemailer.getTestMessageUrl(info);
-    if (previewUrl) {
-      console.log(`[EMAIL] Order confirmation sent to ${data.customerEmail}`);
-      console.log(`[EMAIL] Preview URL: ${previewUrl}`);
-      return previewUrl as string;
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function sendOrderConfirmationEmail(data: OrderEmailData): Promise<EmailResult> {
+  let lastError: string | undefined;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
+    try {
+      const transporter = await getTransporter();
+
+      const info = await transporter.sendMail({
+        from: FROM_ADDRESS,
+        to: data.customerEmail,
+        subject: `Order Confirmed - #${data.orderNumber}`,
+        text: buildOrderConfirmationText(data),
+        html: buildOrderConfirmationHtml(data),
+      });
+
+      // In development with Ethereal, log the preview URL
+      const previewUrl = nodemailer.getTestMessageUrl(info);
+      if (previewUrl) {
+        console.log(`[EMAIL] Order confirmation sent to ${data.customerEmail}`);
+        console.log(`[EMAIL] Preview URL: ${previewUrl}`);
+        return { success: true, previewUrl: previewUrl as string, messageId: info.messageId };
+      }
+
+      console.log(`[EMAIL] Order confirmation sent to ${data.customerEmail} (messageId: ${info.messageId})`);
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      console.error(`[EMAIL] Attempt ${attempt}/${MAX_RETRIES + 1} failed for ${data.customerEmail}: ${lastError}`);
+
+      // Reset transporter on connection errors so it reconnects on retry
+      if (lastError.includes("SMTP") || lastError.includes("connect") || lastError.includes("ECONNREFUSED")) {
+        _transporter = null;
+        _transporterVerified = false;
+      }
+
+      if (attempt <= MAX_RETRIES) {
+        const delay = RETRY_DELAY_MS * attempt;
+        console.log(`[EMAIL] Retrying in ${delay}ms...`);
+        await sleep(delay);
+      }
     }
-
-    console.log(`[EMAIL] Order confirmation sent to ${data.customerEmail} (messageId: ${info.messageId})`);
-    return null;
-  } catch (error) {
-    console.error("[EMAIL] Failed to send order confirmation:", error);
-    return null;
   }
+
+  console.error(`[EMAIL] All ${MAX_RETRIES + 1} attempts failed for order ${data.orderNumber} to ${data.customerEmail}`);
+  return { success: false, error: lastError };
 }
