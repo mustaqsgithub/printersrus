@@ -10,6 +10,12 @@ services:
       - NEXT_PUBLIC_STORE_NAME=PrintersRUs
       - NEXT_PUBLIC_STORE_DESCRIPTION=Your one-stop shop for printers, ink & accessories
       - ADMIN_SETUP_KEY=${ADMIN_SETUP_KEY:?Set ADMIN_SETUP_KEY in .env}
+      - SMTP_HOST=${SMTP_HOST:?Set SMTP_HOST in .env}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER:?Set SMTP_USER in .env}
+      - SMTP_PASS=${SMTP_PASS:?Set SMTP_PASS in .env}
+      - EMAIL_FROM=${EMAIL_FROM:-PrintersRUs <syed.mustaq@gmail.com>}
     volumes:
       - app-data:/app/data
     restart: unless-stopped
