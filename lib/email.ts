@@ -224,36 +224,34 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function sendOrderConfirmationEmail(data: OrderEmailData): Promise<EmailResult> {
+async function sendMailWithRetry(
+  to: string,
+  subject: string,
+  text: string,
+  html: string,
+  label: string,
+): Promise<EmailResult> {
   let lastError: string | undefined;
 
   for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
     try {
       const transporter = await getTransporter();
 
-      const info = await transporter.sendMail({
-        from: FROM_ADDRESS,
-        to: data.customerEmail,
-        subject: `Order Confirmed - #${data.orderNumber}`,
-        text: buildOrderConfirmationText(data),
-        html: buildOrderConfirmationHtml(data),
-      });
+      const info = await transporter.sendMail({ from: FROM_ADDRESS, to, subject, text, html });
 
-      // In development with Ethereal, log the preview URL
       const previewUrl = nodemailer.getTestMessageUrl(info);
       if (previewUrl) {
-        console.log(`[EMAIL] Order confirmation sent to ${data.customerEmail}`);
+        console.log(`[EMAIL] ${label} sent to ${to}`);
         console.log(`[EMAIL] Preview URL: ${previewUrl}`);
         return { success: true, previewUrl: previewUrl as string, messageId: info.messageId };
       }
 
-      console.log(`[EMAIL] Order confirmation sent to ${data.customerEmail} (messageId: ${info.messageId})`);
+      console.log(`[EMAIL] ${label} sent to ${to} (messageId: ${info.messageId})`);
       return { success: true, messageId: info.messageId };
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
-      console.error(`[EMAIL] Attempt ${attempt}/${MAX_RETRIES + 1} failed for ${data.customerEmail}: ${lastError}`);
+      console.error(`[EMAIL] Attempt ${attempt}/${MAX_RETRIES + 1} failed for ${to}: ${lastError}`);
 
-      // Reset transporter on connection errors so it reconnects on retry
       if (lastError.includes("SMTP") || lastError.includes("connect") || lastError.includes("ECONNREFUSED")) {
         _transporter = null;
         _transporterVerified = false;
@@ -267,6 +265,97 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData): Promise<
     }
   }
 
-  console.error(`[EMAIL] All ${MAX_RETRIES + 1} attempts failed for order ${data.orderNumber} to ${data.customerEmail}`);
+  console.error(`[EMAIL] All ${MAX_RETRIES + 1} attempts failed – ${label} to ${to}`);
   return { success: false, error: lastError };
+}
+
+export async function sendOrderConfirmationEmail(data: OrderEmailData): Promise<EmailResult> {
+  return sendMailWithRetry(
+    data.customerEmail,
+    `Order Confirmed - #${data.orderNumber}`,
+    buildOrderConfirmationText(data),
+    buildOrderConfirmationHtml(data),
+    "Order confirmation",
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Verification email
+// ---------------------------------------------------------------------------
+
+export interface VerificationEmailData {
+  recipientEmail: string;
+  recipientName: string;
+  verificationUrl: string;
+}
+
+function buildVerificationHtml(data: VerificationEmailData): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"/></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;padding:24px;">
+    <!-- Header -->
+    <div style="background:#2563eb;padding:32px 24px;border-radius:12px 12px 0 0;text-align:center;">
+      <h1 style="color:#fff;margin:0;font-size:28px;">PrintersRUs</h1>
+      <p style="color:#bfdbfe;margin:8px 0 0;font-size:14px;">Verify Your Email</p>
+    </div>
+
+    <!-- Body -->
+    <div style="background:#fff;padding:32px 24px;border-radius:0 0 12px 12px;">
+      <h2 style="color:#111827;margin:0 0 8px;">Welcome to PrintersRUs!</h2>
+      <p style="color:#4b5563;margin:0 0 24px;">
+        Hi ${data.recipientName}, please verify your email address to complete your account setup.
+      </p>
+
+      <div style="text-align:center;margin:32px 0;">
+        <a href="${data.verificationUrl}"
+           style="display:inline-block;background:#2563eb;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:16px;">
+          Verify Email Address
+        </a>
+      </div>
+
+      <p style="color:#4b5563;margin:24px 0 0;font-size:13px;">
+        Or copy and paste this link in your browser:<br/>
+        <span style="word-break:break-all;color:#2563eb;">${data.verificationUrl}</span>
+      </p>
+
+      <p style="color:#9ca3af;margin:24px 0 0;font-size:12px;">
+        This link expires in 24 hours. If you didn&rsquo;t create an account, you can safely ignore this email.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align:center;padding:24px;color:#9ca3af;font-size:12px;">
+      <p style="margin:0;">PrintersRUs &mdash; Your trusted source for printers and supplies</p>
+      <p style="margin:4px 0 0;">This email was sent to ${data.recipientEmail}</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function buildVerificationText(data: VerificationEmailData): string {
+  return `Welcome to PrintersRUs!
+
+Hi ${data.recipientName},
+
+Please verify your email address to complete your account setup.
+
+Click here to verify: ${data.verificationUrl}
+
+This link expires in 24 hours. If you didn't create an account, you can safely ignore this email.
+
+PrintersRUs - Your trusted source for printers and supplies`;
+}
+
+export async function sendVerificationEmail(data: VerificationEmailData): Promise<EmailResult> {
+  return sendMailWithRetry(
+    data.recipientEmail,
+    "Verify Your Email - PrintersRUs",
+    buildVerificationText(data),
+    buildVerificationHtml(data),
+    "Verification email",
+  );
 }
