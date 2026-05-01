@@ -16,13 +16,12 @@ A modern e-commerce web application for selling printers, ink, toner, and access
 - **Next.js 16** (App Router)
 - **React 19** & **TypeScript**
 - **Tailwind CSS**
-- **Vercel Postgres** (PostgreSQL)
+- **SQLite** (via better-sqlite3)
 - **Zustand** (State management)
 
 ## 📋 Prerequisites
 
 - Node.js 18+
-- PostgreSQL database (Supabase, Neon, or Vercel Marketplace)
 
 ## 🚀 Quick Start
 
@@ -32,33 +31,22 @@ A modern e-commerce web application for selling printers, ink, toner, and access
 npm install
 ```
 
-### 2. Set up database
-
-Choose one:
-
-- **Vercel Marketplace**: Project → Storage → Add Neon/Prisma Postgres
-- **Supabase**: [supabase.com](https://supabase.com) → Create project → Copy connection string
-- **Neon**: [neon.tech](https://neon.tech) → Create project → Copy connection string
-
-### 3. Configure environment
+### 2. Configure environment
 
 Create `.env.local`:
 
 ```env
-POSTGRES_URL=your_connection_string
-POSTGRES_PRISMA_URL=your_connection_string
-POSTGRES_URL_NON_POOLING=your_connection_string
 NEXT_PUBLIC_STORE_NAME=PrinterHub
 ADMIN_SETUP_KEY=your_setup_key
 ```
 
-### 4. Seed database (one-time or reset)
+### 3. Seed database (one-time or reset)
 
 ```bash
 npm run db:seed
 ```
 
-### 5. Run development server
+### 4. Run development server
 
 ```bash
 npm run dev
@@ -79,7 +67,7 @@ npm run lint         # Run ESLint
 
 ## 🗄️ Database
 
-Uses PostgreSQL with tables: `categories`, `products`, `orders`, `order_items`, `users`, `sessions`.
+Uses SQLite (via better-sqlite3) stored at `data/printers.db` with tables: `categories`, `products`, `orders`, `order_items`, `users`, `sessions`.
 
 Use `npm run db:seed` only for first-time setup or to reset sample data.
 After that, manage products and categories from the Admin dashboard.
@@ -121,29 +109,21 @@ See `USER_MANUAL.md` for setup, storefront usage, auth flows, cart behavior, and
 
 ## 🌐 Deployment
 
-### Vercel (Recommended)
+### AWS EC2
 
 1. Push to GitHub
-2. Import on [Vercel](https://vercel.com)
-3. Add PostgreSQL database from Marketplace
-4. Add environment variables
-5. Deploy
-
-Connection strings are auto-provided for Marketplace databases.
+2. Deploy to an EC2 instance
+3. Configure your domain (e.g. via GoDaddy)
+4. Set up nginx with SSL
+5. Add environment variables and start the app
 
 ## 🐛 Troubleshooting
 
-**Missing connection string error:**
+**Database issues:**
 
-- Ensure `.env.local` exists in project root
-- No spaces around `=` in env file
-- Restart terminal after creating `.env.local`
-
-**Connection issues:**
-
-- Verify connection string format
-- Check database is accessible
-- Test connection string with a PostgreSQL client
+- Ensure `data/` directory exists and is writable
+- Run `npm run db:seed` to create and populate the database
+- Delete `data/printers.db` and reseed if the schema is corrupted
 
 ## 📝 License
 
