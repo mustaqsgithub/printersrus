@@ -85,14 +85,15 @@ See `USER_MANUAL.md` for setup, storefront usage, auth flows, cart behavior, and
 ### Bulk Product Import (CSV)
 
 - Go to `/admin` → **Products** → **Bulk Import (CSV)**
-- Required columns:
-  - `name`, `sku`, `description`, `price`, `mainImage`, `categorySlug`
-- Optional columns:
-  - `slug`, `salePrice`, `stockQuantity`, `inStock`, `featured`, `onSale`, `isActive`
-  - `brand`, `longDescription`, `images`
-  - `categoryName`, `categoryDescription`, `categoryImage`
-- For `images`, use pipe-separated URLs (`url1|url2`) or a JSON array string.
-- If `categorySlug` does not exist, include `categoryName` to auto-create the category.
+- **Required columns**: `SKU`, `Name`, `Price`, `Category`
+- **Optional columns**: `Stock`, `Brand`, `Description`, `MainImage`, `Slug`, `SalePrice`, `InStock`, `Featured`, `OnSale`, `IsActive`, `LongDescription`, `Images`, `CategoryDescription`, `CategoryImage`
+- **Header parsing**: Column names are case- and punctuation-insensitive — `SKU`, `sku`, `S K U` all match. `Product_ID` is accepted as a column and ignored.
+- **Category**: Provide a display name (e.g. `Sticky Notes`) or a slug. We slugify it automatically. If the slug doesn't exist yet, the category is auto-created on confirm using the display name.
+- **Image auto-search**: `MainImage` is optional. If omitted, an image is auto-picked from a DuckDuckGo search using the row's `Description` if present, otherwise the `Name` (truncated to ~120 characters). You can swap any image in the review step before confirming.
+- **Description fallback**: If `Description` is empty, the product's stored description defaults to the `Name`.
+- **Two-phase flow**: Upload CSV → review every staged row (edit fields, swap image, deselect) → click **Confirm import** to write to the DB. Nothing is created until you confirm.
+- For `Images`, use pipe-separated URLs (`url1|url2`) or a JSON array string.
+- Limit: 100 rows per upload.
 
 ### PDF version
 

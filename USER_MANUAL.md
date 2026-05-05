@@ -79,14 +79,21 @@ This application is a modern e-commerce storefront for printers and accessories.
 ### Bulk Product Import (CSV)
 
 - Go to `/admin` → **Products** → **Bulk Import (CSV)**
-- Required columns:
-  - `name`, `sku`, `description`, `price`, `mainImage`, `categorySlug`
-- Optional columns:
-  - `slug`, `salePrice`, `stockQuantity`, `inStock`, `featured`, `onSale`, `isActive`
-  - `brand`, `longDescription`, `images`
-  - `categoryName`, `categoryDescription`, `categoryImage`
-- For `images`, use pipe-separated URLs (`url1|url2`) or a JSON array string.
-- If `categorySlug` does not exist, include `categoryName` to create it automatically.
+- **Required columns**: `SKU`, `Name`, `Price`, `Category`
+- **Optional columns**: `Stock`, `Brand`, `Description`, `MainImage`, `Slug`, `SalePrice`, `InStock`, `Featured`, `OnSale`, `IsActive`, `LongDescription`, `Images`, `CategoryDescription`, `CategoryImage`
+- Column names are case- and punctuation-insensitive (so `SKU`, `sku`, and `S K U` all match). `Product_ID` is accepted as a column and ignored, so you can drop in exports that include it.
+- **Category** can be a display name like `Sticky Notes` or a slug — both work. If the category doesn't exist yet, it's auto-created on confirm.
+- The flow is two-phase:
+  1. **Upload** — choose your CSV and click **Preview & fetch images**. The server parses every row and auto-fetches a product image from DuckDuckGo (best-fit, near-square, ≥400px) using the row's `Description` if present, otherwise the `Name` (truncated to ~120 characters).
+  2. **Review** — every staged row appears in a table. You can:
+     - Click the thumbnail to swap the auto-picked image (other DuckDuckGo candidates are pre-loaded).
+     - Click **Edit** on a row to open the full single-product editor and tweak any field.
+     - Use the include/deselect checkboxes to skip rows you don't want.
+  3. Click **Confirm import** to actually write products and any new categories to the database. Rows with errors must be fixed or deselected first.
+- `MainImage` is optional. If you provide it, it pre-selects the image but you can still swap in the picker.
+- `Description` is optional. If omitted, the product's stored description defaults to the `Name`.
+- For `Images`, use pipe-separated URLs (`url1|url2`) or a JSON array string.
+- Limit: 100 rows per upload.
 
 ## Troubleshooting
 
