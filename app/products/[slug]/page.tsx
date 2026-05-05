@@ -110,7 +110,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
   }));
 
   return (
-    <div className="container mx-auto px-4 py-8 bg-white">
+    <div className="container mx-auto px-4 py-8">
       {/* Breadcrumb */}
       <div className="mb-6">
         <Link
@@ -211,7 +211,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
 
           {/* Features */}
-          <div className="border-t pt-6 space-y-3">
+          <div className="border-t border-gray-200 pt-6 space-y-3">
             <div className="flex items-center gap-3 text-gray-900">
               <Truck size={24} className="text-primary-600" />
               <div>

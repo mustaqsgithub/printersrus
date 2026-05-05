@@ -116,7 +116,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
 
   if (loading) {
     return (
-      <div className="bg-white min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <p className="text-gray-500">Loading order...</p>
       </div>
     );
@@ -124,7 +124,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
 
   if (error || !order) {
     return (
-      <div className="bg-white min-h-screen">
+      <div className="min-h-screen">
         <div className="container mx-auto px-4 py-12 text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-4">Order not found</h1>
           <p className="text-gray-600 mb-6">{error || "This order does not exist."}</p>
@@ -137,7 +137,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
   }
 
   return (
-    <div className="bg-white min-h-screen">
+    <div className="min-h-screen">
       <div className="container mx-auto px-4 py-12">
         <div className="max-w-3xl mx-auto">
           <Link href="/account" className="text-primary-600 hover:text-primary-700">

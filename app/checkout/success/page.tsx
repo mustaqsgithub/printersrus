@@ -8,7 +8,7 @@ import { CheckCircle, Mail, AlertTriangle } from "lucide-react";
 export default function CheckoutSuccessPage() {
   return (
     <Suspense fallback={
-      <div className="container mx-auto px-4 py-16 bg-white">
+      <div className="container mx-auto px-4 py-16">
         <div className="max-w-2xl mx-auto text-center">
           <p className="text-gray-900">Loading order details...</p>
         </div>
@@ -27,7 +27,7 @@ function CheckoutSuccessInner() {
   const emailFailed = searchParams.get("emailFailed") === "1";
 
   return (
-    <div className="container mx-auto px-4 py-16 bg-white">
+    <div className="container mx-auto px-4 py-16">
       <div className="max-w-2xl mx-auto text-center">
         <CheckCircle size={80} className="mx-auto text-green-600 mb-6" />
         <h1 className="text-4xl font-bold mb-4 text-gray-900">Order Confirmed!</h1>
