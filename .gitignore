@@ -6,6 +6,8 @@
 .pnp.js
 .yarn/install-state.gz
 
+/.claude/
+
 # testing
 /coverage
 /test-results/
@@ -49,3 +51,4 @@ localDB.db
 localDB.db-*
 local.db
 local.db-*
+
