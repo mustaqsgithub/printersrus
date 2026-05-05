@@ -13,4 +13,5 @@ ENV NODE_ENV=development
 EXPOSE 3000
 
 ENTRYPOINT ["/docker-dev-entrypoint.sh"]
-CMD ["npm", "run", "dev", "--", "-H", "0.0.0.0"]
+# Webpack + watchpack polling works with bind mounts; Turbopack often misses edits on Docker Desktop (Windows/macOS).
+CMD ["npm", "run", "dev", "--", "-H", "0.0.0.0", "--webpack"]
