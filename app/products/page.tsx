@@ -9,6 +9,9 @@ interface SearchParams {
   sale?: string;
   search?: string;
   sort?: string;
+  brands?: string;
+  minPrice?: string;
+  maxPrice?: string;
 }
 
 export const metadata = {
@@ -22,13 +25,22 @@ export default async function ProductsPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const { category, sale, search, sort } = params;
+  const { category, sale, search, sort, brands, minPrice, maxPrice } = params;
+
+  const selectedBrands = brands
+    ? brands.split(',').map((b) => b.trim()).filter(Boolean)
+    : [];
+  const minPriceNum = minPrice && minPrice !== '' ? Number(minPrice) : undefined;
+  const maxPriceNum = maxPrice && maxPrice !== '' ? Number(maxPrice) : undefined;
 
   // Fetch products based on filters
   const dbProducts = await dbHelpers.getAllProducts({
     category,
     sale: sale === 'true',
     search,
+    brands: selectedBrands.length > 0 ? selectedBrands : undefined,
+    minPrice: minPriceNum,
+    maxPrice: maxPriceNum,
   });
 
   // Transform database products to component format
@@ -59,7 +71,6 @@ export default async function ProductsPage({
   // Sort products
   let sortedProducts = [...products];
   if (sort === 'featured' || !sort) {
-    // Sort by featured first, then by created date
     sortedProducts.sort((a, b) => {
       if (a.featured && !b.featured) return -1;
       if (!a.featured && b.featured) return 1;
@@ -93,18 +104,22 @@ export default async function ProductsPage({
     slug: c.slug,
   }));
 
+  // Get brand options + price bounds for filters
+  const allBrands = await dbHelpers.getDistinctBrands();
+  const priceRange = await dbHelpers.getProductPriceRange();
+
   return (
-    <div className="container mx-auto px-4 py-8 bg-white">
+    <div className="container mx-auto px-4 py-8">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-4xl font-bold mb-2 text-gray-900">
           {sale === 'true' ? 'Sale Items - Save Big!' : categoryObj?.name || 'All Products'}
         </h1>
         {categoryObj?.description && (
-          <p className="text-gray-900">{categoryObj.description}</p>
+          <p className="text-gray-700">{categoryObj.description}</p>
         )}
         {search && (
-          <p className="text-gray-900 mt-2">
+          <p className="text-gray-700 mt-2">
             Search results for: <strong>&quot;{search}&quot;</strong>
           </p>
         )}
@@ -113,20 +128,27 @@ export default async function ProductsPage({
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Filters Sidebar */}
         <aside className="lg:w-64 flex-shrink-0">
-          <ProductFilters categories={allCategories} />
+          <ProductFilters
+            categories={allCategories}
+            brands={allBrands}
+            priceRange={priceRange}
+            selectedBrands={selectedBrands}
+            minPrice={minPriceNum}
+            maxPrice={maxPriceNum}
+          />
         </aside>
 
         {/* Products Grid */}
         <div className="flex-1">
           {/* Results count and sort */}
           <div className="flex justify-between items-center mb-6">
-            <p className="text-gray-900">
+            <p className="text-gray-700">
               Showing {sortedProducts.length} {sortedProducts.length === 1 ? 'product' : 'products'}
             </p>
             <ProductSort />
           </div>
 
-          <Suspense fallback={<div className="text-gray-900">Loading products...</div>}>
+          <Suspense fallback={<div className="text-gray-700">Loading products...</div>}>
             <ProductGrid products={sortedProducts} />
           </Suspense>
         </div>

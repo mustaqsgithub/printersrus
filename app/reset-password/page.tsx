@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Lock } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useToast } from "@/components/ToastProvider";
+import { PasswordInput } from "@/components/PasswordInput";
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
@@ -58,14 +59,14 @@ function ResetPasswordForm() {
   };
 
   return (
-    <div className="bg-white min-h-screen flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md border border-gray-200 rounded-2xl shadow-sm p-8">
+    <div className="flex justify-center px-4 py-6 sm:py-8">
+      <div className="w-full max-w-md bg-white border border-gray-200 rounded-2xl shadow-sm p-8">
         <div className="text-center mb-8">
           <div className="w-14 h-14 bg-primary-600 rounded-full flex items-center justify-center mx-auto mb-4">
             <Lock size={24} className="text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900">Reset password</h1>
-          <p className="text-gray-900 mt-2">Choose a new password</p>
+          <p className="text-gray-600 mt-2">Choose a new password</p>
         </div>
 
         {message && (
@@ -85,13 +86,12 @@ function ResetPasswordForm() {
             <label htmlFor="password" className="block text-sm font-medium text-gray-900 mb-1">
               New password
             </label>
-            <input
+            <PasswordInput
               id="password"
-              type="password"
+              autoComplete="new-password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
             />
           </div>
           <div>
@@ -101,13 +101,12 @@ function ResetPasswordForm() {
             >
               Confirm password
             </label>
-            <input
+            <PasswordInput
               id="confirmPassword"
-              type="password"
+              autoComplete="new-password"
               required
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
             />
           </div>
           <button
@@ -118,7 +117,7 @@ function ResetPasswordForm() {
           </button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-gray-900">
+        <div className="mt-6 text-center text-sm text-gray-700">
           <Link href="/login" className="text-primary-600 hover:text-primary-700 font-medium">
             Back to sign in
           </Link>
@@ -130,7 +129,7 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<div className="bg-white min-h-screen" />}>
+    <Suspense fallback={<div className="min-h-[40vh]" />}>
       <ResetPasswordForm />
     </Suspense>
   );

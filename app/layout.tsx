@@ -3,6 +3,7 @@ import "./globals.css";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { ToastProvider } from "@/components/ToastProvider";
+import { CommandPalette } from "@/components/CommandPalette";
 
 // Store configuration - this will be moved to environment variables
 const STORE_NAME = process.env.NEXT_PUBLIC_STORE_NAME || "printersrus";
@@ -24,13 +25,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="flex flex-col min-h-screen bg-gray-50">
+      <body className="flex flex-col min-h-screen bg-gray-50 text-gray-900">
         <ToastProvider>
           <Header />
-          <main className="flex-grow bg-gray-50">
+          <main className="flex-grow">
             {children}
           </main>
           <Footer />
+          <CommandPalette />
         </ToastProvider>
       </body>
     </html>

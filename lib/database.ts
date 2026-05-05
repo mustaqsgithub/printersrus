@@ -260,7 +260,14 @@ export const dbHelpers = {
   },
 
   // Products
-  getAllProducts: async (filters?: { category?: string; sale?: boolean; search?: string }) => {
+  getAllProducts: async (filters?: {
+    category?: string;
+    sale?: boolean;
+    search?: string;
+    brands?: string[];
+    minPrice?: number;
+    maxPrice?: number;
+  }) => {
     const db = getDb();
     const conditions: string[] = ["is_active = 1"];
     const params: any[] = [];
@@ -277,9 +284,50 @@ export const dbHelpers = {
       conditions.push("(name LIKE ? COLLATE NOCASE OR description LIKE ? COLLATE NOCASE OR brand LIKE ? COLLATE NOCASE)");
       params.push(searchTerm, searchTerm, searchTerm);
     }
+    if (filters?.brands && filters.brands.length > 0) {
+      const placeholders = filters.brands.map(() => "?").join(",");
+      conditions.push(`brand COLLATE NOCASE IN (${placeholders})`);
+      params.push(...filters.brands);
+    }
+    // Use sale_price when on sale, else price, for the bounds check.
+    const effectivePrice = "COALESCE(CASE WHEN on_sale = 1 THEN sale_price END, price)";
+    if (typeof filters?.minPrice === "number" && !Number.isNaN(filters.minPrice)) {
+      conditions.push(`${effectivePrice} >= ?`);
+      params.push(filters.minPrice);
+    }
+    if (typeof filters?.maxPrice === "number" && !Number.isNaN(filters.maxPrice)) {
+      conditions.push(`${effectivePrice} <= ?`);
+      params.push(filters.maxPrice);
+    }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     return db.prepare(`SELECT * FROM products ${where} ORDER BY featured DESC, created_at DESC`).all(...params);
+  },
+
+  getDistinctBrands: async () => {
+    const db = getDb();
+    const rows = db
+      .prepare(
+        `SELECT DISTINCT brand FROM products WHERE is_active = 1 AND brand IS NOT NULL AND TRIM(brand) <> '' ORDER BY brand COLLATE NOCASE`,
+      )
+      .all() as Array<{ brand: string }>;
+    return rows.map((r) => r.brand);
+  },
+
+  getProductPriceRange: async () => {
+    const db = getDb();
+    const row = db
+      .prepare(
+        `SELECT
+           MIN(COALESCE(CASE WHEN on_sale = 1 THEN sale_price END, price)) AS min,
+           MAX(COALESCE(CASE WHEN on_sale = 1 THEN sale_price END, price)) AS max
+         FROM products WHERE is_active = 1`,
+      )
+      .get() as { min: number | null; max: number | null } | undefined;
+    return {
+      min: row?.min ?? 0,
+      max: row?.max ?? 0,
+    };
   },
 
   getAllProductsAdmin: async () => {

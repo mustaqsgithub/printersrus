@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Lock, Mail } from "lucide-react";
 import { useAuthStore } from "@/lib/auth-store";
 import { useToast } from "@/components/ToastProvider";
+import { PasswordInput } from "@/components/PasswordInput";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -46,14 +47,14 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="bg-white min-h-screen flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md border border-gray-200 rounded-2xl shadow-sm p-8">
+    <div className="flex justify-center px-4 py-6 sm:py-8">
+      <div className="w-full max-w-md bg-white border border-gray-200 rounded-2xl shadow-sm p-8">
         <div className="text-center mb-8">
           <div className="w-14 h-14 bg-primary-600 rounded-full flex items-center justify-center mx-auto mb-4">
             <Lock size={24} className="text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900">Sign in</h1>
-          <p className="text-gray-900 mt-2">Welcome back to your account</p>
+          <p className="text-gray-600 mt-2">Welcome back to your account</p>
         </div>
 
         {error && (
@@ -84,7 +85,7 @@ export default function LoginPage() {
                 required
                 value={formData.email}
                 onChange={handleChange}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white placeholder:text-gray-400"
               />
             </div>
           </div>
@@ -93,15 +94,13 @@ export default function LoginPage() {
             <label htmlFor="password" className="block text-sm font-medium text-gray-900 mb-1">
               Password
             </label>
-            <input
+            <PasswordInput
               id="password"
               name="password"
-              type="password"
               autoComplete="current-password"
               required
               value={formData.password}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
             />
             <div className="mt-2 text-right text-sm">
               <Link href="/forgot-password" className="text-primary-600 hover:text-primary-700 font-medium">
@@ -119,7 +118,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-gray-900">
+        <div className="mt-6 text-center text-sm text-gray-700">
           Don&apos;t have an account?{" "}
           <Link href="/signup" className="text-primary-600 hover:text-primary-700 font-medium">
             Create one

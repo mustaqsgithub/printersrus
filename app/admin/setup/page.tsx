@@ -62,14 +62,14 @@ export default function AdminSetupPage() {
   };
 
   return (
-    <div className="bg-white min-h-screen flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-lg border border-gray-200 rounded-2xl shadow-sm p-8">
+    <div className="flex justify-center px-4 py-6 sm:py-8">
+      <div className="w-full max-w-lg bg-white border border-gray-200 rounded-2xl shadow-sm p-8">
         <div className="text-center mb-8">
           <div className="w-14 h-14 bg-primary-600 rounded-full flex items-center justify-center mx-auto mb-4">
             <Shield size={24} className="text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900">Admin Setup</h1>
-          <p className="text-gray-900 mt-2">Create the first admin account.</p>
+          <p className="text-gray-600 mt-2">Create the first admin account.</p>
         </div>
 
         {error && (
@@ -100,7 +100,7 @@ export default function AdminSetupPage() {
                 required
                 value={formData.firstName}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>
             <div>
@@ -114,7 +114,7 @@ export default function AdminSetupPage() {
                 required
                 value={formData.lastName}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>
           </div>
@@ -130,7 +130,7 @@ export default function AdminSetupPage() {
               required
               value={formData.email}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
 
@@ -144,7 +144,7 @@ export default function AdminSetupPage() {
               type="tel"
               value={formData.phone}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
 
@@ -159,7 +159,7 @@ export default function AdminSetupPage() {
               required
               value={formData.password}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
 
@@ -174,7 +174,7 @@ export default function AdminSetupPage() {
               required
               value={formData.setupKey}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
 
@@ -187,7 +187,7 @@ export default function AdminSetupPage() {
           </button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-gray-900">
+        <div className="mt-6 text-center text-sm text-gray-700">
           Already have an admin?{" "}
           <Link href="/admin/login" className="text-primary-600 hover:text-primary-700 font-medium">
             Sign in

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { UserPlus } from "lucide-react";
 import { useAuthStore } from "@/lib/auth-store";
 import { useToast } from "@/components/ToastProvider";
+import { PasswordInput } from "@/components/PasswordInput";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -68,14 +69,14 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="bg-white min-h-screen flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md border border-gray-200 rounded-2xl shadow-sm p-8">
+    <div className="flex justify-center px-4 py-6 sm:py-8">
+      <div className="w-full max-w-md bg-white border border-gray-200 rounded-2xl shadow-sm p-8">
         <div className="text-center mb-8">
           <div className="w-14 h-14 bg-primary-600 rounded-full flex items-center justify-center mx-auto mb-4">
             <UserPlus size={24} className="text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900">Create account</h1>
-          <p className="text-gray-900 mt-2">Join PrinterHub to start shopping</p>
+          <p className="text-gray-600 mt-2">Join us to start shopping</p>
         </div>
 
         {error && (
@@ -112,7 +113,7 @@ export default function SignupPage() {
                 required
                 value={formData.firstName}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white placeholder:text-gray-400"
               />
             </div>
             <div>
@@ -126,7 +127,7 @@ export default function SignupPage() {
                 required
                 value={formData.lastName}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white placeholder:text-gray-400"
               />
             </div>
           </div>
@@ -143,7 +144,7 @@ export default function SignupPage() {
               required
               value={formData.email}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white placeholder:text-gray-400"
             />
           </div>
 
@@ -158,7 +159,7 @@ export default function SignupPage() {
               autoComplete="tel"
               value={formData.phone}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white placeholder:text-gray-400"
             />
           </div>
 
@@ -166,15 +167,13 @@ export default function SignupPage() {
             <label htmlFor="password" className="block text-sm font-medium text-gray-900 mb-1">
               Password
             </label>
-            <input
+            <PasswordInput
               id="password"
               name="password"
-              type="password"
               autoComplete="new-password"
               required
               value={formData.password}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
             />
           </div>
 
@@ -182,15 +181,13 @@ export default function SignupPage() {
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-900 mb-1">
               Confirm password
             </label>
-            <input
+            <PasswordInput
               id="confirmPassword"
               name="confirmPassword"
-              type="password"
               autoComplete="new-password"
               required
               value={formData.confirmPassword}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
             />
           </div>
 
@@ -203,7 +200,7 @@ export default function SignupPage() {
           </button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-gray-900">
+        <div className="mt-6 text-center text-sm text-gray-700">
           Already have an account?{" "}
           <Link href="/login" className="text-primary-600 hover:text-primary-700 font-medium">
             Sign in

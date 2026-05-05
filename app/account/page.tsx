@@ -26,7 +26,7 @@ import { useAuthStore } from "@/lib/auth-store";
 export default function AccountPage() {
   return (
     <Suspense fallback={
-      <div className="bg-white min-h-screen">
+      <div className="min-h-screen">
         <div className="container mx-auto px-4 py-16">
           <div className="max-w-2xl mx-auto text-center">
             <p className="text-gray-900">Loading your account...</p>
@@ -325,7 +325,7 @@ function AccountPageInner() {
 
   if (isLoading && !user) {
     return (
-      <div className="bg-white min-h-screen">
+      <div className="min-h-screen">
         <div className="container mx-auto px-4 py-16">
           <div className="max-w-2xl mx-auto text-center">
             <p className="text-gray-900">Loading your account...</p>
@@ -337,7 +337,7 @@ function AccountPageInner() {
 
   if (!user) {
     return (
-      <div className="bg-white min-h-screen">
+      <div className="min-h-screen">
         <div className="container mx-auto px-4 py-16">
           <div className="max-w-2xl mx-auto text-center">
             <div className="w-16 h-16 bg-primary-600 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -368,7 +368,7 @@ function AccountPageInner() {
   }
 
   return (
-    <div className="bg-white min-h-screen">
+    <div className="min-h-screen">
       <div className="container mx-auto px-4 py-8">
         {/* Back Button */}
         <div className="mb-6">
@@ -496,7 +496,7 @@ function AccountPageInner() {
                             type="text"
                             value={formData.firstName}
                             onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white placeholder:text-gray-400"
                           />
                         ) : (
                           <p className="text-gray-900">{formData.firstName}</p>
@@ -512,7 +512,7 @@ function AccountPageInner() {
                             type="text"
                             value={formData.lastName}
                             onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white placeholder:text-gray-400"
                           />
                         ) : (
                           <p className="text-gray-900">{formData.lastName}</p>
@@ -528,7 +528,7 @@ function AccountPageInner() {
                             type="email"
                             value={formData.email}
                             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white placeholder:text-gray-400"
                           />
                         ) : (
                           <p className="text-gray-900">{formData.email}</p>
@@ -544,7 +544,7 @@ function AccountPageInner() {
                             type="tel"
                             value={formData.phone}
                             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white placeholder:text-gray-400"
                           />
                         ) : (
                           <p className="text-gray-900">{formData.phone}</p>
@@ -913,7 +913,7 @@ function AccountPageInner() {
                                 type={showCurrentPassword ? "text" : "password"}
                                 value={passwordData.currentPassword}
                                 onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white placeholder:text-gray-400"
                                 placeholder="Enter current password"
                               />
                               <button
@@ -933,7 +933,7 @@ function AccountPageInner() {
                                 type={showNewPassword ? "text" : "password"}
                                 value={passwordData.newPassword}
                                 onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white placeholder:text-gray-400"
                                 placeholder="At least 8 characters"
                               />
                               <button
@@ -952,7 +952,7 @@ function AccountPageInner() {
                               type="password"
                               value={passwordData.confirmPassword}
                               onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white placeholder:text-gray-400"
                               placeholder="Re-enter new password"
                             />
                           </div>
@@ -1077,7 +1077,7 @@ function AccountPageInner() {
                                   type="text"
                                   value={paymentFormData.cardholderName}
                                   onChange={(e) => setPaymentFormData({ ...paymentFormData, cardholderName: e.target.value })}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white placeholder:text-gray-400"
                                   placeholder="Name as it appears on card"
                                 />
                               </div>
@@ -1091,7 +1091,7 @@ function AccountPageInner() {
                                     const formatted = raw.replace(/(\d{4})(?=\d)/g, "$1 ");
                                     setPaymentFormData({ ...paymentFormData, cardNumber: formatted });
                                   }}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white placeholder:text-gray-400"
                                   placeholder="1234 5678 9012 3456"
                                   maxLength={23}
                                 />
@@ -1102,7 +1102,7 @@ function AccountPageInner() {
                                   <select
                                     value={paymentFormData.expiryMonth}
                                     onChange={(e) => setPaymentFormData({ ...paymentFormData, expiryMonth: e.target.value })}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white placeholder:text-gray-400"
                                   >
                                     <option value="">Month</option>
                                     {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
@@ -1115,7 +1115,7 @@ function AccountPageInner() {
                                   <select
                                     value={paymentFormData.expiryYear}
                                     onChange={(e) => setPaymentFormData({ ...paymentFormData, expiryYear: e.target.value })}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white placeholder:text-gray-400"
                                   >
                                     <option value="">Year</option>
                                     {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() % 100 + i).map((y) => (

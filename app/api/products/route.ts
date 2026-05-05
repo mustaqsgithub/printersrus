@@ -9,10 +9,23 @@ export async function GET(request: NextRequest) {
     const featured = searchParams.get('featured') === 'true' || undefined;
     const search = searchParams.get('search') || undefined;
 
+    const brandsRaw = searchParams.get('brands');
+    const brands = brandsRaw
+      ? brandsRaw.split(',').map((b) => b.trim()).filter(Boolean)
+      : undefined;
+
+    const minPriceRaw = searchParams.get('minPrice');
+    const maxPriceRaw = searchParams.get('maxPrice');
+    const minPrice = minPriceRaw !== null && minPriceRaw !== '' ? Number(minPriceRaw) : undefined;
+    const maxPrice = maxPriceRaw !== null && maxPriceRaw !== '' ? Number(maxPriceRaw) : undefined;
+
     let products = await dbHelpers.getAllProducts({
       category,
       sale,
       search,
+      brands,
+      minPrice,
+      maxPrice,
     });
 
     // Filter by featured if requested

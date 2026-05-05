@@ -7,29 +7,35 @@
   --foreground: #171717;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  color: #171717;
-  background: #f8fafc;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-main {
-  color: #171717;
+html {
+  color-scheme: light;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+
+  .shadow-soft {
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      0 4px 12px -4px rgba(15, 23, 42, 0.08);
+  }
+
+  .shadow-pop {
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.05),
+      0 8px 20px -6px rgba(15, 23, 42, 0.12);
+  }
 }
 
+/* Toast slide-in */
 @keyframes toast-in {
   from {
     transform: translateY(12px);
@@ -43,4 +49,25 @@ main {
 
 .animate-in {
   animation: toast-in 220ms ease-out;
+}
+
+/* Gentle entrance for sections */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.rise-in {
+  animation: rise-in 400ms ease-out both;
+}
+
+/* Pulse ring for sale dot */
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5); }
+  70% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+
+.pulse-ring {
+  animation: pulse-ring 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }

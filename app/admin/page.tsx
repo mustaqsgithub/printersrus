@@ -26,9 +26,9 @@ export default function AdminPage() {
 
   if (isLoading && !user) {
     return (
-      <div className="bg-white min-h-screen">
+      <div className="min-h-screen">
         <div className="container mx-auto px-4 py-16 text-center">
-          <p className="text-gray-900">Loading admin console...</p>
+          <p className="text-gray-700">Loading admin console...</p>
         </div>
       </div>
     );
@@ -36,7 +36,7 @@ export default function AdminPage() {
 
   if (!canAccess) {
     return (
-      <div className="bg-white min-h-screen">
+      <div className="min-h-screen">
         <div className="container mx-auto px-4 py-16 text-center">
           <Shield size={64} className="mx-auto text-gray-300 mb-4" />
           <h1 className="text-3xl font-bold text-gray-900 mb-3">Admin access only</h1>
@@ -63,7 +63,7 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="bg-white min-h-screen">
+    <div className="min-h-screen">
       <div className="container mx-auto px-4 py-12">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
           <div className="flex items-center gap-3">

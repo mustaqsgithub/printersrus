@@ -177,7 +177,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="bg-white min-h-screen py-8">
+    <div className="min-h-screen py-8">
       <div className="container mx-auto px-4">
         <div className="mb-6">
           <Link
@@ -191,7 +191,7 @@ export default function CheckoutPage() {
 
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 mb-6">
               <div className="flex items-center gap-2 mb-6">
                 <Lock size={20} className="text-green-600" />
                 <h1 className="text-2xl font-bold text-gray-900">Secure Checkout</h1>
@@ -322,10 +322,10 @@ export default function CheckoutPage() {
 
           {/* Order Summary */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-md p-6 sticky top-24">
+            <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 sticky top-24">
               <h2 className="text-xl font-bold mb-4 text-gray-900">Order Summary</h2>
 
-              <div className="space-y-4 mb-4 border-b pb-4">
+              <div className="space-y-4 mb-4 border-b border-gray-200 pb-4">
                 {items.map((item) => {
                   const product = item.product;
                   const displayPrice = product.salePrice || product.price;
@@ -366,7 +366,7 @@ export default function CheckoutPage() {
                 <Row label="Tax (estimated)" value={`£${tax.toFixed(2)}`} />
               </div>
 
-              <div className="border-t pt-4">
+              <div className="border-t border-gray-200 pt-4">
                 <div className="flex justify-between text-lg">
                   <span className="font-bold text-gray-900">Total</span>
                   <span className="font-bold text-2xl text-gray-900">£{grandTotal.toFixed(2)}</span>
@@ -407,7 +407,7 @@ function Field({
         required={required}
         value={value}
         onChange={onChange}
-        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white"
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 bg-white placeholder:text-gray-400"
       />
     </div>
   );

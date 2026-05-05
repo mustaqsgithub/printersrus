@@ -49,8 +49,8 @@ function VerifyContent() {
   }, [token, loadUser]);
 
   return (
-    <div className="bg-white min-h-screen flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md border border-gray-200 rounded-2xl shadow-sm p-8 text-center">
+    <div className="flex items-center justify-center px-4 py-6 sm:py-8">
+      <div className="w-full max-w-md bg-white border border-gray-200 rounded-2xl shadow-sm p-8 text-center">
         {status === "success" ? (
           <>
             <CheckCircle size={56} className="mx-auto text-green-600 mb-4" />
@@ -62,7 +62,7 @@ function VerifyContent() {
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Verification failed</h1>
           </>
         )}
-        <p className="text-gray-900 mb-6">{message}</p>
+        <p className="text-gray-700 mb-6">{message}</p>
         <Link
           href="/login"
           className="inline-block bg-primary-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-700 transition"
@@ -76,7 +76,7 @@ function VerifyContent() {
 
 export default function VerifyPage() {
   return (
-    <Suspense fallback={<div className="bg-white min-h-screen" />}>
+    <Suspense fallback={<div className="min-h-[40vh]" />}>
       <VerifyContent />
     </Suspense>
   );

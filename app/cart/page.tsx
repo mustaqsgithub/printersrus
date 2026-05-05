@@ -16,7 +16,7 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <div className="container mx-auto px-4 py-16 bg-white">
+      <div className="container mx-auto px-4 py-16">
         <div className="max-w-2xl mx-auto text-center">
           <ShoppingBag size={80} className="mx-auto text-gray-300 mb-6" />
           <h1 className="text-3xl font-bold mb-4 text-gray-900">Your cart is empty</h1>
@@ -35,7 +35,7 @@ export default function CartPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 bg-white">
+    <div className="container mx-auto px-4 py-8">
       {/* Back button */}
       <div className="mb-6">
         <Link
@@ -87,7 +87,7 @@ export default function CartPage() {
                       <div className="flex items-center border border-gray-300 rounded-lg">
                         <button
                           onClick={() => updateQuantity(product.id, item.quantity - 1, item.variantId)}
-                          className="px-3 py-1 hover:bg-gray-100"
+                          className="px-3 py-1 text-gray-700 hover:bg-gray-100"
                         >
                           -
                         </button>
@@ -96,7 +96,7 @@ export default function CartPage() {
                         </span>
                         <button
                           onClick={() => updateQuantity(product.id, item.quantity + 1, item.variantId)}
-                          className="px-3 py-1 hover:bg-gray-100"
+                          className="px-3 py-1 text-gray-700 hover:bg-gray-100"
                         >
                           +
                         </button>
@@ -159,7 +159,7 @@ export default function CartPage() {
               </div>
             </div>
 
-            <div className="border-t pt-4 mb-6">
+            <div className="border-t border-gray-200 pt-4 mb-6">
               <div className="flex justify-between text-lg">
                 <span className="font-bold text-gray-900">Total</span>
                 <span className="font-bold text-2xl text-gray-900">£{grandTotal.toFixed(2)}</span>
@@ -175,7 +175,7 @@ export default function CartPage() {
 
             <Link
               href="/products"
-              className="block w-full bg-white border border-gray-300 text-center py-3 rounded-lg font-semibold hover:bg-gray-50 transition"
+              className="block w-full bg-white border border-gray-300 text-gray-900 text-center py-3 rounded-lg font-semibold hover:bg-gray-50 transition"
             >
               Continue Shopping
             </Link>
