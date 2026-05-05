@@ -5,11 +5,6 @@ import { LogoMark } from "@/components/Logo";
 export function PromoBanner() {
   return (
     <div className="relative isolate overflow-hidden rounded-2xl bg-gray-900 ring-1 ring-transparent shadow-soft">
-      {/* Subtle brand-tinted glow in the top-right */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-32 -right-24 h-80 w-80 rounded-full bg-primary-500/15 blur-3xl"
-      />
       {/* Faint grid line at the bottom for visual interest */}
       <div
         aria-hidden
