@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useCartStore } from "@/lib/cart-store";
 import { useAuthStore } from "@/lib/auth-store";
 
-const STORE_NAME = process.env.NEXT_PUBLIC_STORE_NAME || "printersrus";
+const STORE_NAME = process.env.NEXT_PUBLIC_STORE_NAME;
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -54,7 +54,7 @@ export function Header() {
       {/* Top Bar */}
       <div className="bg-primary-600 text-white py-2">
         <div className="container mx-auto px-4 text-xs sm:text-sm text-center">
-          Free shipping on orders over £50! | Customer Support: 1-800-PRINTER
+          Free shipping on orders over £50! | Customer Support: 1-800-PRINTERS
         </div>
       </div>
 

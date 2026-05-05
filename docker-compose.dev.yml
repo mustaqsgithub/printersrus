@@ -20,7 +20,7 @@ services:
       NEXT_PUBLIC_STORE_NAME: PrintersRUs
       NEXT_PUBLIC_STORE_DESCRIPTION: Your one-stop shop for printers, ink & accessories
       ADMIN_SETUP_KEY: printersrus-admin-2026
-      # File watching via Docker Desktop (Windows/macOS)
+      # Webpack dev server (see Dockerfile.dev --webpack) uses watchpack; polling fixes missed edits on bind mounts.
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
     volumes:
