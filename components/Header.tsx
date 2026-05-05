@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useCartStore } from "@/lib/cart-store";
 import { useAuthStore } from "@/lib/auth-store";
 
-const STORE_NAME = process.env.NEXT_PUBLIC_STORE_NAME;
+const STORE_NAME = process.env.NEXT_PUBLIC_STORE_NAME || "printersrus";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
