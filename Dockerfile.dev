@@ -1,0 +1,17 @@
+FROM node:22-alpine
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+
+COPY scripts/docker-dev-entrypoint.sh /docker-dev-entrypoint.sh
+# Windows checkouts often use CRLF; the stray \r breaks the shebang ("no such file or directory").
+RUN sed -i 's/\r$//' /docker-dev-entrypoint.sh && chmod +x /docker-dev-entrypoint.sh
+
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=development
+
+EXPOSE 3000
+
+ENTRYPOINT ["/docker-dev-entrypoint.sh"]
+# Webpack + watchpack polling works with bind mounts; Turbopack often misses edits on Docker Desktop (Windows/macOS).
+CMD ["npm", "run", "dev", "--", "-H", "0.0.0.0", "--webpack"]

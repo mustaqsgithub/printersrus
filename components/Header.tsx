@@ -54,7 +54,7 @@ export function Header() {
       {/* Top Bar */}
       <div className="bg-primary-600 text-white py-2">
         <div className="container mx-auto px-4 text-xs sm:text-sm text-center">
-          Free shipping on orders over £50! | Customer Support: 1-800-PRINTER
+          Free shipping on orders over £50! | Customer Support: 1-800-PRINTERS
         </div>
       </div>
 
