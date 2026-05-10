@@ -25,6 +25,14 @@ export async function POST(request: NextRequest) {
   const user = await getSessionUser(token);
   if (!user) return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
 
+  const stripe = getStripe();
+  if (!stripe) {
+    return NextResponse.json(
+      { message: "Stripe is not configured. Please set STRIPE_SECRET_KEY in environment variables." },
+      { status: 503 }
+    );
+  }
+
   const body = await request.json().catch(() => null);
   const stripePaymentMethodId = body?.stripePaymentMethodId;
   if (!stripePaymentMethodId) {
@@ -35,7 +43,6 @@ export async function POST(request: NextRequest) {
   }
 
   const u = user as any;
-  const stripe = getStripe();
   const customerId = await dbHelpers.getUserStripeCustomerId(u.id);
   if (!customerId) {
     return NextResponse.json({ message: "Stripe customer not found." }, { status: 400 });
@@ -83,10 +90,13 @@ export async function DELETE(request: NextRequest) {
   // Detach from Stripe if it has a token
   const existing = (await dbHelpers.getPaymentMethodById(id, u.id)) as any;
   if (existing?.stripe_payment_method_id) {
-    try {
-      await getStripe().paymentMethods.detach(existing.stripe_payment_method_id);
-    } catch (err) {
-      console.warn("[payment-methods] failed to detach Stripe pm:", err);
+    const stripe = getStripe();
+    if (stripe) {
+      try {
+        await stripe.paymentMethods.detach(existing.stripe_payment_method_id);
+      } catch (err) {
+        console.warn("[payment-methods] failed to detach Stripe pm:", err);
+      }
     }
   }
 

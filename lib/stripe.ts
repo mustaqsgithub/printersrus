@@ -2,11 +2,12 @@ import Stripe from "stripe";
 
 let _stripe: Stripe | null = null;
 
-export function getStripe(): Stripe {
+export function getStripe(): Stripe | null {
   if (_stripe) return _stripe;
   const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) {
-    throw new Error("STRIPE_SECRET_KEY is not set");
+  if (!key || key === "sk_test_your_stripe_test_secret_key_here") {
+    // Return null for development when Stripe is not configured
+    return null;
   }
   _stripe = new Stripe(key);
   return _stripe;

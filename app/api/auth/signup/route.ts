@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createEmailVerificationToken, createSession, createUser, getUserByEmail, toAuthUser } from "@/lib/auth";
-import { setSessionCookie, getOrigin } from "@/lib/auth-cookies";
+import { createEmailVerificationToken, createUser, getUserByEmail, toAuthUser } from "@/lib/auth";
+import { getOrigin } from "@/lib/auth-cookies";
 import { sendVerificationEmail } from "@/lib/email";
 
 export async function POST(request: NextRequest) {
@@ -26,7 +26,6 @@ export async function POST(request: NextRequest) {
     phone,
     password,
   });
-  const { token, expiresAt } = await createSession(user.id);
   const verification = await createEmailVerificationToken(user.id);
   const verificationUrl = `${getOrigin(request)}/verify?token=${verification.token}`;
 
@@ -40,7 +39,10 @@ export async function POST(request: NextRequest) {
     console.error(`[SIGNUP] Verification email failed for ${user.email}: ${emailResult.error}`);
   }
 
-  const response = NextResponse.json({ user: toAuthUser(user), verificationUrl });
-  setSessionCookie(response, token, expiresAt);
-  return response;
+  // Do not create session - user must verify email first
+  return NextResponse.json({
+    user: toAuthUser(user),
+    verificationUrl,
+    message: "Please check your email to verify your account before logging in."
+  });
 }

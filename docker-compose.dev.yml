@@ -1,6 +1,6 @@
 # Next.js dev server with bind-mounted source (hot reload; no rebuild on UI edits).
 # Usage:
-#   docker compose -f docker-compose.dev.yml up --build
+#   docker compose -f docker-compose.dev.yml --env-file .env.smtp.local up --build
 # Stop the production compose stack first if it also binds port 3000.
 # After dependency changes (package.json / lockfile), run:
 #   docker compose -f docker-compose.dev.yml exec web npm ci
@@ -23,6 +23,14 @@ services:
       # Webpack dev server (see Dockerfile.dev --webpack) uses watchpack; polling fixes missed edits on bind mounts.
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
+      # SMTP Configuration (order confirmation emails)
+      # If not set, emails are sent via Ethereal test accounts (dev only – not delivered to real recipients)
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      EMAIL_FROM: ${EMAIL_FROM:-PrintersRUs <orders@printersrus.co.uk>}
     volumes:
       - .:/app
       - node_modules:/app/node_modules

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionUser, toAuthUser, verifyEmailToken } from "@/lib/auth";
-import { getSessionToken } from "@/lib/auth-cookies";
+import { createSession, toAuthUser, verifyEmailToken } from "@/lib/auth";
+import { setSessionCookie } from "@/lib/auth-cookies";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
@@ -13,13 +13,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Invalid or expired verification link." }, { status: 400 });
   }
 
-  const sessionToken = await getSessionToken();
-  if (sessionToken) {
-    const sessionUser = await getSessionUser(sessionToken);
-    if (sessionUser && sessionUser.id !== user.id) {
-      return NextResponse.json({ user: toAuthUser(user) });
-    }
-  }
+  // Create session after successful email verification
+  const { token, expiresAt } = await createSession(user.id);
+  const response = NextResponse.json({
+    user: toAuthUser(user),
+    message: "Email verified successfully. You are now logged in."
+  });
+  setSessionCookie(response, token, expiresAt);
 
-  return NextResponse.json({ user: toAuthUser(user) });
+  return response;
 }

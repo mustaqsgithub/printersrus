@@ -14,6 +14,13 @@ export async function POST() {
   const u = user as any;
   const stripe = getStripe();
 
+  if (!stripe) {
+    return NextResponse.json(
+      { message: "Stripe is not configured. Please set STRIPE_SECRET_KEY in environment variables." },
+      { status: 503 }
+    );
+  }
+
   let customerId = await dbHelpers.getUserStripeCustomerId(u.id);
   if (!customerId) {
     const customer = await stripe.customers.create({
