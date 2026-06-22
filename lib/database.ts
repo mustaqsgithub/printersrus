@@ -149,6 +149,22 @@ export async function initDatabase() {
     try { db.exec(`ALTER TABLE users ADD COLUMN email_verified_at TEXT`); } catch {}
     try { db.exec(`ALTER TABLE users ADD COLUMN email_notifications INTEGER DEFAULT 1`); } catch {}
 
+    // Admin invitations table. The owner (super admin) invites a staff member
+    // by email; the invitee follows the emailed link and sets their own
+    // credentials, which creates/promotes their account to 'admin'.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS admin_invitations (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL,
+        token_hash TEXT UNIQUE NOT NULL,
+        invited_by TEXT,
+        role TEXT DEFAULT 'admin',
+        expires_at TEXT NOT NULL,
+        accepted_at TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
     // Carts table
     db.exec(`
       CREATE TABLE IF NOT EXISTS carts (

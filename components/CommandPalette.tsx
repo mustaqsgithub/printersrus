@@ -31,6 +31,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/auth-store";
+import { isStaffRole } from "@/lib/roles";
 
 type LucideIcon = typeof Search;
 
@@ -194,7 +195,7 @@ export function CommandPalette() {
         { type: "nav", id: "account", label: "Account", description: "Profile & settings", href: "/account", icon: User, group: "Account" },
         { type: "nav", id: "orders", label: "Orders", description: "View order history", href: "/orders", icon: Receipt, group: "Account" },
       );
-      if (user.role === "admin") {
+      if (isStaffRole(user.role)) {
         base.push({ type: "nav", id: "admin", label: "Admin Dashboard", description: "Manage the store", href: "/admin", icon: Shield, group: "Account" });
       }
     } else {

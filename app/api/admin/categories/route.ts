@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { dbHelpers } from "@/lib/database";
 import { getSessionToken } from "@/lib/auth-cookies";
 import { getSessionUser } from "@/lib/auth";
+import { isStaffRole } from "@/lib/roles";
 
 const toApiCategory = (category: any) => ({
   id: category.id,
@@ -30,7 +31,7 @@ const requireAdmin = async () => {
   const token = await getSessionToken();
   if (!token) return null;
   const user = await getSessionUser(token);
-  if (!user || user.role !== "admin") return null;
+  if (!user || !isStaffRole(user.role)) return null;
   return user;
 };
 

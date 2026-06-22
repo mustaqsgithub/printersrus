@@ -359,3 +359,87 @@ export async function sendVerificationEmail(data: VerificationEmailData): Promis
     "Verification email",
   );
 }
+
+// ---------------------------------------------------------------------------
+// Admin invite email
+// ---------------------------------------------------------------------------
+
+export interface AdminInviteEmailData {
+  recipientEmail: string;
+  inviteUrl: string;
+  existingAccount?: boolean;
+}
+
+function buildAdminInviteHtml(data: AdminInviteEmailData): string {
+  const intro = data.existingAccount
+    ? "You've been invited to join the PrintersRUs admin team. Click below and sign in with your existing account to activate your admin access."
+    : "You've been invited to join the PrintersRUs admin team. Click below to set up your account and choose your own password.";
+  const buttonLabel = data.existingAccount ? "Activate Admin Access" : "Set Up Your Account";
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"/></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;padding:24px;">
+    <!-- Header -->
+    <div style="background:#2563eb;padding:32px 24px;border-radius:12px 12px 0 0;text-align:center;">
+      <h1 style="color:#fff;margin:0;font-size:28px;">PrintersRUs</h1>
+      <p style="color:#bfdbfe;margin:8px 0 0;font-size:14px;">Admin Invitation</p>
+    </div>
+
+    <!-- Body -->
+    <div style="background:#fff;padding:32px 24px;border-radius:0 0 12px 12px;">
+      <h2 style="color:#111827;margin:0 0 8px;">You're invited to be an admin</h2>
+      <p style="color:#4b5563;margin:0 0 24px;">${intro}</p>
+
+      <div style="text-align:center;margin:32px 0;">
+        <a href="${data.inviteUrl}"
+           style="display:inline-block;background:#2563eb;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:16px;">
+          ${buttonLabel}
+        </a>
+      </div>
+
+      <p style="color:#4b5563;margin:24px 0 0;font-size:13px;">
+        Or copy and paste this link in your browser:<br/>
+        <span style="word-break:break-all;color:#2563eb;">${data.inviteUrl}</span>
+      </p>
+
+      <p style="color:#9ca3af;margin:24px 0 0;font-size:12px;">
+        This invitation expires in 7 days. If you weren&rsquo;t expecting this, you can safely ignore this email.
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align:center;padding:24px;color:#9ca3af;font-size:12px;">
+      <p style="margin:0;">PrintersRUs &mdash; Your trusted source for printers and supplies</p>
+      <p style="margin:4px 0 0;">This email was sent to ${data.recipientEmail}</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function buildAdminInviteText(data: AdminInviteEmailData): string {
+  const intro = data.existingAccount
+    ? "You've been invited to join the PrintersRUs admin team. Open the link below and sign in with your existing account to activate your admin access."
+    : "You've been invited to join the PrintersRUs admin team. Open the link below to set up your account and choose your own password.";
+  return `You're invited to be a PrintersRUs admin
+
+${intro}
+
+${data.inviteUrl}
+
+This invitation expires in 7 days. If you weren't expecting this, you can safely ignore this email.
+
+PrintersRUs - Your trusted source for printers and supplies`;
+}
+
+export async function sendAdminInviteEmail(data: AdminInviteEmailData): Promise<EmailResult> {
+  return sendMailWithRetry(
+    data.recipientEmail,
+    "You're invited to be a PrintersRUs admin",
+    buildAdminInviteText(data),
+    buildAdminInviteHtml(data),
+    "Admin invite",
+  );
+}
