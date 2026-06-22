@@ -56,6 +56,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
     mainImage: dbProduct.main_image,
     images: dbProduct.images,
     brand: dbProduct.brand,
+    weight: dbProduct.weight,
+    dimensions: dbProduct.dimensions,
     categoryId: dbProduct.category_id,
     inStock: Boolean(dbProduct.in_stock),
     stockQuantity: dbProduct.stock_quantity,
@@ -216,7 +218,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
               <Truck size={24} className="text-primary-600" />
               <div>
                 <p className="font-semibold text-gray-900">Free Shipping</p>
-                <p className="text-sm text-gray-900">On orders over £50</p>
+                <p className="text-sm text-gray-900">On orders over £250</p>
               </div>
             </div>
             <div className="flex items-center gap-3 text-gray-900">
@@ -229,6 +231,38 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
         </div>
       </div>
+
+      {/* Specifications */}
+      {(() => {
+        const specs = [
+          { label: "Brand", value: product.brand },
+          { label: "SKU", value: product.sku },
+          { label: "Weight", value: product.weight != null ? `${product.weight} kg` : null },
+          { label: "Dimensions", value: product.dimensions },
+        ].filter((s) => s.value);
+
+        if (specs.length === 0) return null;
+
+        return (
+          <div className="mb-16 max-w-4xl">
+            <h2 className="text-2xl font-bold mb-4 text-gray-900">Specifications</h2>
+            <div className="overflow-hidden rounded-lg border border-gray-200">
+              <table className="w-full text-sm">
+                <tbody>
+                  {specs.map((spec, i) => (
+                    <tr key={spec.label} className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}>
+                      <th className="w-1/3 px-4 py-3 text-left font-semibold text-gray-900 align-top">
+                        {spec.label}
+                      </th>
+                      <td className="px-4 py-3 text-gray-700">{spec.value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Long Description */}
       {product.longDescription && (

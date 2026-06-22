@@ -69,7 +69,7 @@ export function Header() {
         <div className="container mx-auto px-4 text-xs sm:text-sm text-center text-gray-300">
           <span className="inline-flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-primary-400" />
-            <span>Free shipping on orders over £50</span>
+            <span>Free shipping on orders over £250</span>
             <span className="text-gray-500">·</span>
             <span>Customer Support: 1-800-PRINTER</span>
           </span>

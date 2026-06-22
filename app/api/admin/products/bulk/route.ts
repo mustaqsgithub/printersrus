@@ -4,6 +4,7 @@ import { dbHelpers } from "@/lib/database";
 import { getSessionToken } from "@/lib/auth-cookies";
 import { getSessionUser } from "@/lib/auth";
 import { pickBestImage, searchImages, type ImageResult } from "@/lib/image-search";
+import { applyMarkup } from "@/lib/markup";
 
 type CsvRow = Record<string, string>;
 
@@ -185,7 +186,9 @@ export async function POST(request: NextRequest) {
         const sku = getField(row, "sku") || "";
         const name = getField(row, "name", "productname", "title") || "";
         const priceStr = getField(row, "price");
-        const price = priceStr ? parseNumber(priceStr, 0) : 0;
+        // Store the price 10% above the uploaded CSV value (applied here so the
+        // marked-up price is visible in the import preview).
+        const price = priceStr ? applyMarkup(parseNumber(priceStr, 0)) : 0;
 
         const explicitCategorySlug = getField(row, "categoryslug");
         const categoryDisplayName = getField(row, "categoryname", "category");
@@ -207,7 +210,7 @@ export async function POST(request: NextRequest) {
           inStockField !== undefined ? parseBool(inStockField, stockQuantity > 0) : stockQuantity > 0;
 
         const salePriceStr = getField(row, "saleprice");
-        const salePrice = salePriceStr ? parseNumber(salePriceStr, 0) : null;
+        const salePrice = salePriceStr ? applyMarkup(parseNumber(salePriceStr, 0)) : null;
         const featured = parseBool(getField(row, "featured"), false);
         const onSale = parseBool(getField(row, "onsale"), false);
         const isActive = parseBool(getField(row, "isactive"), true);

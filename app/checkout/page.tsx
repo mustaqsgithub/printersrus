@@ -9,6 +9,7 @@ import { useCartStore } from "@/lib/cart-store";
 import { useAuthStore } from "@/lib/auth-store";
 import StripePaymentForm from "@/components/StripePaymentForm";
 import PaypalCheckoutButton from "@/components/PaypalCheckoutButton";
+import { FREE_SHIPPING_THRESHOLD, SHIPPING_FLAT_RATE } from "@/lib/shipping";
 
 type PaymentTab = "stripe" | "paypal";
 
@@ -23,7 +24,7 @@ export default function CheckoutPage() {
   const [savePaymentMethod, setSavePaymentMethod] = useState(false);
 
   const totalPrice = getTotalPrice();
-  const shippingCost = totalPrice > 50 ? 0 : 8.99;
+  const shippingCost = totalPrice > FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FLAT_RATE;
   const tax = totalPrice * 0.08;
   const grandTotal = totalPrice + shippingCost + tax;
 
