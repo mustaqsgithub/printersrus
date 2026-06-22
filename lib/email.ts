@@ -6,8 +6,10 @@ let _transporterVerified = false;
 async function getTransporter(): Promise<nodemailer.Transporter> {
   if (_transporter && _transporterVerified) return _transporter;
 
-  // Use real SMTP if configured
-  if (process.env.SMTP_HOST) {
+  // Use real SMTP only when fully configured. If the host is set but the
+  // username/password are missing, fall back to Ethereal rather than failing
+  // every send with an auth error.
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
     _transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT || 587),

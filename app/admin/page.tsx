@@ -76,12 +76,20 @@ export default function AdminPage() {
             <Shield size={28} className="text-primary-600" />
             <h1 className="text-3xl font-bold text-gray-900">Admin Console</h1>
           </div>
-          <button
-            onClick={() => signOut()}
-            className="px-4 py-2 rounded-md bg-gray-900 text-white font-semibold hover:bg-gray-800"
-          >
-            Sign out
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/"
+              className="px-4 py-2 rounded-md bg-white text-gray-700 border border-gray-200 font-semibold hover:border-gray-300"
+            >
+              View store
+            </Link>
+            <button
+              onClick={() => signOut()}
+              className="px-4 py-2 rounded-md bg-gray-900 text-white font-semibold hover:bg-gray-800"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2 mb-6">

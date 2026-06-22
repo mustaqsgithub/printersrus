@@ -9,6 +9,7 @@
     "lint": "next lint",
     "db:seed": "tsx scripts/seed-database.ts",
     "db:reset": "npm run db:seed",
+    "set-super-admin": "tsx scripts/set-super-admin.ts",
     "test": "npx playwright test",
     "test:smoke": "npx playwright test tests/smoke.spec.ts",
     "test:integration": "npx playwright test tests/integration.spec.ts",
