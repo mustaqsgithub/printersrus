@@ -61,6 +61,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
     categoryId: dbProduct.category_id,
     inStock: Boolean(dbProduct.in_stock),
     stockQuantity: dbProduct.stock_quantity,
+    features: dbProduct.features,
+    specifications: dbProduct.specifications,
     featured: Boolean(dbProduct.featured),
     onSale: Boolean(dbProduct.on_sale),
     isActive: Boolean(dbProduct.is_active),
@@ -79,6 +81,21 @@ export default async function ProductPage({ params }: ProductPageProps) {
   // Parse images from JSON
   const additionalImages = product.images ? JSON.parse(product.images) : [];
   const allImages = [product.mainImage, ...additionalImages];
+
+  // Scraped features/specifications (populated by the bulk-import enrichment
+  // worker). Parse defensively — these are stored as JSON text.
+  const parseJsonSafe = <T,>(value: unknown, fallback: T): T => {
+    if (typeof value !== "string" || !value.trim()) return fallback;
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return fallback;
+    }
+  };
+  const scrapedFeatures = parseJsonSafe<string[]>(product.features, []).filter(
+    (f) => typeof f === "string" && f.trim()
+  );
+  const scrapedSpecs = parseJsonSafe<Record<string, string>>(product.specifications, {});
 
   // Get related products (same category, excluding current)
   const allProducts = await dbHelpers.getAllProducts();
@@ -212,6 +229,18 @@ export default async function ProductPage({ params }: ProductPageProps) {
             <AddToCartButton product={product} />
           </div>
 
+          {/* Key features (scraped) */}
+          {scrapedFeatures.length > 0 && (
+            <div className="border-t border-gray-200 pt-6 mb-6">
+              <h2 className="text-lg font-semibold mb-3 text-gray-900">Key Features</h2>
+              <ul className="list-disc pl-5 space-y-1 text-gray-700">
+                {scrapedFeatures.map((feature, i) => (
+                  <li key={i}>{feature}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Features */}
           <div className="border-t border-gray-200 pt-6 space-y-3">
             <div className="flex items-center gap-3 text-gray-900">
@@ -239,6 +268,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
           { label: "SKU", value: product.sku },
           { label: "Weight", value: product.weight != null ? `${product.weight} kg` : null },
           { label: "Dimensions", value: product.dimensions },
+          // Merge in scraped specifications (skip keys already covered above).
+          ...Object.entries(scrapedSpecs)
+            .filter(([label]) => !["brand", "sku", "weight", "dimensions"].includes(label.toLowerCase()))
+            .map(([label, value]) => ({ label, value })),
         ].filter((s) => s.value);
 
         if (specs.length === 0) return null;

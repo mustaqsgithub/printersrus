@@ -86,14 +86,15 @@ See `USER_MANUAL.md` for setup, storefront usage, auth flows, cart behavior, and
 
 - Go to `/admin` → **Products** → **Bulk Import (CSV)**
 - **Required columns**: `SKU`, `Name`, `Price`, `Category`
-- **Optional columns**: `Stock`, `Brand`, `Description`, `MainImage`, `Slug`, `SalePrice`, `InStock`, `Featured`, `OnSale`, `IsActive`, `LongDescription`, `Images`, `CategoryDescription`, `CategoryImage`
+- **Optional columns**: `Stock`, `Brand`, `Description`, `Slug`, `SalePrice`, `InStock`, `Featured`, `OnSale`, `IsActive`, `LongDescription`, `Images`, `CategoryDescription`, `CategoryImage`
 - **Header parsing**: Column names are case- and punctuation-insensitive — `SKU`, `sku`, `S K U` all match. `Product_ID` is accepted as a column and ignored.
-- **Category**: Provide a display name (e.g. `Sticky Notes`) or a slug. We slugify it automatically. If the slug doesn't exist yet, the category is auto-created on confirm using the display name.
-- **Image auto-search**: `MainImage` is optional. If omitted, an image is auto-picked from a DuckDuckGo search using the row's `Description` if present, otherwise the `Name` (truncated to ~120 characters). You can swap any image in the review step before confirming.
+- **Category**: Provide a display name (e.g. `Sticky Notes`) or a slug. We slugify it automatically. If the slug doesn't exist yet, the category is auto-created using the display name.
+- **SKU-based upsert**: New SKUs are inserted immediately with a placeholder image; existing SKUs are updated in place (price/stock/fields) without re-fetching anything.
+- **Background enrichment**: After import, new items are processed in batches of 25 — each gets an auto-picked image (DuckDuckGo, best-fit, near-square, ≥400px) plus web-scraped features and specifications. A progress bar tracks enriched/remaining/failed, with a **Retry / resume** action.
 - **Description fallback**: If `Description` is empty, the product's stored description defaults to the `Name`.
-- **Two-phase flow**: Upload CSV → review every staged row (edit fields, swap image, deselect) → click **Confirm import** to write to the DB. Nothing is created until you confirm.
-- For `Images`, use pipe-separated URLs (`url1|url2`) or a JSON array string.
-- Limit: 100 rows per upload.
+- **One-step flow**: Upload CSV → products and categories are written immediately → enrichment runs in the background. New products are visible right away with a placeholder image.
+- For `Images`, use pipe-separated URLs (`url1|url2`) or a JSON array string (stored as gallery images, not touched by enrichment).
+- No row limit — writes are batched (500/transaction) and enrichment runs 25 at a time, so any size CSV works.
 
 ### PDF version
 

@@ -80,20 +80,19 @@ This application is a modern e-commerce storefront for printers and accessories.
 
 - Go to `/admin` → **Products** → **Bulk Import (CSV)**
 - **Required columns**: `SKU`, `Name`, `Price`, `Category`
-- **Optional columns**: `Stock`, `Brand`, `Description`, `MainImage`, `Slug`, `SalePrice`, `InStock`, `Featured`, `OnSale`, `IsActive`, `LongDescription`, `Images`, `CategoryDescription`, `CategoryImage`
+- **Optional columns**: `Stock`, `Brand`, `Description`, `Slug`, `SalePrice`, `InStock`, `Featured`, `OnSale`, `IsActive`, `LongDescription`, `Images`, `CategoryDescription`, `CategoryImage`
 - Column names are case- and punctuation-insensitive (so `SKU`, `sku`, and `S K U` all match). `Product_ID` is accepted as a column and ignored, so you can drop in exports that include it.
-- **Category** can be a display name like `Sticky Notes` or a slug — both work. If the category doesn't exist yet, it's auto-created on confirm.
-- The flow is two-phase:
-  1. **Upload** — choose your CSV and click **Preview & fetch images**. The server parses every row and auto-fetches a product image from DuckDuckGo (best-fit, near-square, ≥400px) using the row's `Description` if present, otherwise the `Name` (truncated to ~120 characters).
-  2. **Review** — every staged row appears in a table. You can:
-     - Click the thumbnail to swap the auto-picked image (other DuckDuckGo candidates are pre-loaded).
-     - Click **Edit** on a row to open the full single-product editor and tweak any field.
-     - Use the include/deselect checkboxes to skip rows you don't want.
-  3. Click **Confirm import** to actually write products and any new categories to the database. Rows with errors must be fixed or deselected first.
-- `MainImage` is optional. If you provide it, it pre-selects the image but you can still swap in the picker.
+- **Category** can be a display name like `Sticky Notes` or a slug — both work. If the category doesn't exist yet, it's auto-created on import.
+- **Items are matched by `SKU`:**
+  - A **new** SKU is imported immediately with a placeholder image and queued for background enrichment.
+  - An **existing** SKU is updated in place — `Price`, `Stock`, and the other declared fields are refreshed. The image, features, and specifications are **not** re-fetched (the item is already enriched).
+- The flow is one step:
+  1. **Upload** — choose your CSV and click **Import CSV**. New products and any new categories are written straight away, so even thousands of rows import in seconds. Rows with missing required fields or duplicate SKUs are skipped and listed.
+  2. **Background enrichment** — for each new item the server fetches a product image (DuckDuckGo, best-fit, near-square, ≥400px) plus **features** and **specifications** scraped from the web, in batches of 25. A progress bar shows how many are enriched / remaining / failed. Use **Retry / resume** to re-queue failures or restart after a server restart.
+- Until enrichment finishes, new products are visible on the storefront with a "Image coming soon" placeholder.
 - `Description` is optional. If omitted, the product's stored description defaults to the `Name`.
-- For `Images`, use pipe-separated URLs (`url1|url2`) or a JSON array string.
-- Limit: 100 rows per upload.
+- For `Images`, use pipe-separated URLs (`url1|url2`) or a JSON array string. These are stored as additional gallery images and are not affected by enrichment.
+- No row limit — items are written to the database in batches and images/specifications are fetched in the background, so any size CSV works.
 
 ## Troubleshooting
 

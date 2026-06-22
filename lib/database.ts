@@ -2,6 +2,11 @@
 import { getDb } from "./db";
 import crypto from "crypto";
 
+// Placeholder shown for freshly-imported products until the background
+// enrichment worker fetches a real image. products.main_image is NOT NULL, so
+// imported rows are inserted with this value.
+export const PLACEHOLDER_IMAGE = "/placeholder-product.svg";
+
 // Initialize database schema
 export async function initDatabase() {
   try {
@@ -239,6 +244,28 @@ export async function initDatabase() {
       db.exec(`ALTER TABLE users ADD COLUMN stripe_customer_id TEXT`);
     }
 
+    // Add product enrichment columns if missing (additive migration).
+    // features/specifications hold scraped JSON; enrichment_status drives the
+    // background fetch queue. Existing rows default to 'done' so they are never
+    // re-fetched.
+    const productCols = db.prepare(`PRAGMA table_info(products)`).all() as Array<{ name: string }>;
+    const productColNames = new Set(productCols.map((c) => c.name));
+    if (!productColNames.has("features")) {
+      db.exec(`ALTER TABLE products ADD COLUMN features TEXT`);
+    }
+    if (!productColNames.has("specifications")) {
+      db.exec(`ALTER TABLE products ADD COLUMN specifications TEXT`);
+    }
+    if (!productColNames.has("enrichment_status")) {
+      db.exec(`ALTER TABLE products ADD COLUMN enrichment_status TEXT DEFAULT 'done'`);
+    }
+    if (!productColNames.has("enrichment_error")) {
+      db.exec(`ALTER TABLE products ADD COLUMN enrichment_error TEXT`);
+    }
+    if (!productColNames.has("enrichment_attempts")) {
+      db.exec(`ALTER TABLE products ADD COLUMN enrichment_attempts INTEGER DEFAULT 0`);
+    }
+
     console.log('Database initialized successfully!');
   } catch (error) {
     console.error('Error initializing database:', error);
@@ -444,6 +471,284 @@ export const dbHelpers = {
   deleteProduct: async (id: string) => {
     const db = getDb();
     db.prepare(`DELETE FROM products WHERE id = ?`).run(id);
+  },
+
+  getProductBySku: async (sku: string) => {
+    const db = getDb();
+    return db.prepare(`SELECT * FROM products WHERE sku = ?`).get(sku) || null;
+  },
+
+  // Load identity/pricing keys for every existing product in one query. Used by
+  // bulk import so it can decide insert-vs-update, keep slugs unique, and apply
+  // markup idempotently without a point lookup per row (prohibitively slow for
+  // very large CSVs).
+  getAllProductKeys: async () => {
+    const db = getDb();
+    const rows = db
+      .prepare(`SELECT sku, id, slug, price, cost, sale_price FROM products`)
+      .all() as Array<{
+      sku: string;
+      id: string;
+      slug: string;
+      price: number;
+      cost: number | null;
+      sale_price: number | null;
+    }>;
+    const bySku = new Map<string, (typeof rows)[number]>();
+    const slugs = new Set<string>();
+    for (const r of rows) {
+      bySku.set(r.sku, r);
+      slugs.add(r.slug);
+    }
+    return { bySku, slugs };
+  },
+
+  // Insert a product from a bulk import. The image/features/specifications are
+  // filled in later by the background enrichment worker, so this inserts a
+  // placeholder image and marks the row as pending enrichment.
+  insertImportedProduct: async (product: {
+    id: string;
+    sku: string;
+    name: string;
+    slug: string;
+    description: string;
+    longDescription?: string | null;
+    price: number;
+    salePrice?: number | null;
+    brand?: string | null;
+    categoryId: string;
+    inStock: boolean;
+    stockQuantity: number;
+    featured: boolean;
+    onSale: boolean;
+    isActive: boolean;
+    images?: string | null;
+  }) => {
+    const db = getDb();
+    db.prepare(`
+      INSERT INTO products (
+        id, sku, name, slug, description, long_description, price, sale_price,
+        main_image, images, brand, category_id, in_stock, stock_quantity,
+        featured, on_sale, is_active, enrichment_status, enrichment_attempts
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, 'pending', 0
+      )
+    `).run(
+      product.id,
+      product.sku,
+      product.name,
+      product.slug,
+      product.description,
+      product.longDescription || null,
+      product.price,
+      product.salePrice || null,
+      PLACEHOLDER_IMAGE,
+      product.images || null,
+      product.brand || null,
+      product.categoryId,
+      product.inStock ? 1 : 0,
+      product.stockQuantity,
+      product.featured ? 1 : 0,
+      product.onSale ? 1 : 0,
+      product.isActive ? 1 : 0
+    );
+  },
+
+  // Apply a bulk import (inserts + updates) in chunked transactions so a CSV of
+  // any size imports without holding one enormous transaction. Categories must
+  // already be resolved to ids by the caller. New products are inserted as
+  // pending enrichment with a placeholder image; existing products only get the
+  // provided columns updated (never the image/features/specs/enrichment state).
+  bulkApplyImport: async (ops: {
+    inserts: Array<{
+      id: string;
+      sku: string;
+      name: string;
+      slug: string;
+      description: string;
+      longDescription: string | null;
+      price: number;
+      salePrice: number | null;
+      cost: number | null;
+      brand: string | null;
+      categoryId: string;
+      inStock: boolean;
+      stockQuantity: number;
+      featured: boolean;
+      onSale: boolean;
+      isActive: boolean;
+      images: string | null;
+    }>;
+    updates: Array<{ id: string; columns: Record<string, string | number | null> }>;
+  }) => {
+    const db = getDb();
+
+    const insertStmt = db.prepare(`
+      INSERT INTO products (
+        id, sku, name, slug, description, long_description, price, sale_price, cost,
+        main_image, images, brand, category_id, in_stock, stock_quantity,
+        featured, on_sale, is_active, enrichment_status, enrichment_attempts
+      ) VALUES (
+        @id, @sku, @name, @slug, @description, @long_description, @price, @sale_price, @cost,
+        @main_image, @images, @brand, @category_id, @in_stock, @stock_quantity,
+        @featured, @on_sale, @is_active, 'pending', 0
+      )
+    `);
+
+    const CHUNK = 500;
+    // Yield to the event loop between chunks so a very large import doesn't
+    // block other requests for the whole duration. better-sqlite3 is
+    // synchronous, so each chunk still runs to completion, but the gaps let
+    // pending I/O (other HTTP requests) make progress.
+    const yieldToLoop = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+    const insertChunk = db.transaction((rows: typeof ops.inserts) => {
+      for (const p of rows) {
+        insertStmt.run({
+          id: p.id,
+          sku: p.sku,
+          name: p.name,
+          slug: p.slug,
+          description: p.description,
+          long_description: p.longDescription || null,
+          price: p.price,
+          sale_price: p.salePrice ?? null,
+          cost: p.cost ?? null,
+          main_image: PLACEHOLDER_IMAGE,
+          images: p.images || null,
+          brand: p.brand || null,
+          category_id: p.categoryId,
+          in_stock: p.inStock ? 1 : 0,
+          stock_quantity: p.stockQuantity,
+          featured: p.featured ? 1 : 0,
+          on_sale: p.onSale ? 1 : 0,
+          is_active: p.isActive ? 1 : 0,
+        });
+      }
+    });
+
+    const updateChunk = db.transaction((rows: typeof ops.updates) => {
+      for (const u of rows) {
+        const keys = Object.keys(u.columns);
+        if (keys.length === 0) continue;
+        const setClause = keys.map((k) => `${k} = ?`).join(", ");
+        const values = keys.map((k) => u.columns[k]);
+        values.push(u.id);
+        db.prepare(
+          `UPDATE products SET ${setClause}, updated_at = datetime('now') WHERE id = ?`
+        ).run(...values);
+      }
+    });
+
+    for (let i = 0; i < ops.inserts.length; i += CHUNK) {
+      insertChunk(ops.inserts.slice(i, i + CHUNK));
+      await yieldToLoop();
+    }
+    for (let i = 0; i < ops.updates.length; i += CHUNK) {
+      updateChunk(ops.updates.slice(i, i + CHUNK));
+      await yieldToLoop();
+    }
+
+    return { created: ops.inserts.length, updated: ops.updates.length };
+  },
+
+  // Enrichment queue helpers --------------------------------------------------
+
+  // Reset rows stuck in 'processing' (e.g. after a server restart) back to
+  // 'pending' so they get picked up again.
+  resetStuckEnrichment: async () => {
+    const db = getDb();
+    const info = db
+      .prepare(`UPDATE products SET enrichment_status = 'pending' WHERE enrichment_status = 'processing'`)
+      .run();
+    return info.changes;
+  },
+
+  // Atomically claim up to `limit` pending products: select + mark 'processing'
+  // inside one IMMEDIATE transaction so two concurrent drains (even across
+  // connections/processes) can't grab the same rows.
+  claimPendingEnrichment: async (limit: number) => {
+    const db = getDb();
+    const claim = db.transaction((lim: number) => {
+      const rows = db
+        .prepare(
+          `SELECT * FROM products WHERE enrichment_status = 'pending' ORDER BY created_at ASC LIMIT ?`
+        )
+        .all(lim) as any[];
+      if (rows.length > 0) {
+        const ids = rows.map((r) => r.id);
+        const placeholders = ids.map(() => "?").join(",");
+        db.prepare(
+          `UPDATE products SET enrichment_status = 'processing', enrichment_attempts = enrichment_attempts + 1 WHERE id IN (${placeholders})`
+        ).run(...ids);
+      }
+      return rows;
+    });
+    return claim.immediate(limit) as any[];
+  },
+
+  setEnrichmentResult: async (
+    id: string,
+    result: {
+      status: "done" | "failed";
+      mainImage?: string | null;
+      features?: string[] | null;
+      specifications?: Record<string, string> | null;
+      error?: string | null;
+    }
+  ) => {
+    const db = getDb();
+    const fields: string[] = ["enrichment_status = ?", "enrichment_error = ?"];
+    const values: any[] = [result.status, result.error || null];
+
+    if (result.mainImage) {
+      fields.push("main_image = ?");
+      values.push(result.mainImage);
+    }
+    if (result.features !== undefined) {
+      fields.push("features = ?");
+      values.push(result.features && result.features.length ? JSON.stringify(result.features) : null);
+    }
+    if (result.specifications !== undefined) {
+      fields.push("specifications = ?");
+      values.push(
+        result.specifications && Object.keys(result.specifications).length
+          ? JSON.stringify(result.specifications)
+          : null
+      );
+    }
+
+    values.push(id);
+    db.prepare(
+      `UPDATE products SET ${fields.join(", ")}, updated_at = datetime('now') WHERE id = ?`
+    ).run(...values);
+  },
+
+  // Re-queue failed rows for another enrichment attempt.
+  requeueFailedEnrichment: async () => {
+    const db = getDb();
+    const info = db
+      .prepare(`UPDATE products SET enrichment_status = 'pending' WHERE enrichment_status = 'failed'`)
+      .run();
+    return info.changes;
+  },
+
+  countEnrichmentStatuses: async () => {
+    const db = getDb();
+    const rows = db
+      .prepare(
+        `SELECT enrichment_status AS status, COUNT(*) AS count FROM products GROUP BY enrichment_status`
+      )
+      .all() as Array<{ status: string | null; count: number }>;
+    const counts = { pending: 0, processing: 0, done: 0, failed: 0, total: 0 };
+    for (const row of rows) {
+      const key = (row.status || "done") as keyof typeof counts;
+      if (key in counts && key !== "total") counts[key] = row.count;
+      counts.total += row.count;
+    }
+    return counts;
   },
 
   // Orders
