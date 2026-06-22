@@ -33,9 +33,6 @@ jobs:
       - name: Set up test environment variables
         run: |
           echo "STRIPE_SECRET_KEY=sk_test_dummy_key_for_ci" >> $GITHUB_ENV
-          echo "PAYPAL_CLIENT_ID=test_dummy_client_id_for_ci" >> $GITHUB_ENV
-          echo "PAYPAL_CLIENT_SECRET=test_dummy_secret_for_ci" >> $GITHUB_ENV
-          echo "PAYPAL_ENV=sandbox" >> $GITHUB_ENV
 
       - name: Run smoke tests
         run: npm run test:smoke

@@ -7,7 +7,7 @@ import { SUPPORT_PHONE, SUPPORT_WHATSAPP } from "@/lib/contact";
 const perks = [
   { icon: Truck, title: "Free Shipping", desc: "On orders over £250" },
   { icon: RotateCcw, title: "30-Day Returns", desc: "Hassle-free exchanges" },
-  { icon: ShieldCheck, title: "Secure Checkout", desc: "Stripe & PayPal protected" },
+  { icon: ShieldCheck, title: "Secure Checkout", desc: "Stripe protected" },
   { icon: Headphones, title: "Expert Support", desc: "Real humans, 7 days a week" },
 ];
 

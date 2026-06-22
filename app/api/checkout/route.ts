@@ -4,7 +4,6 @@ import { getDb } from "@/lib/db";
 import { sendOrderConfirmationEmail } from "@/lib/email";
 import { priceCart } from "@/lib/pricing";
 import { getStripe, toMinorUnits } from "@/lib/stripe";
-import { getPaypalOrder } from "@/lib/paypal";
 import crypto from "crypto";
 
 interface AddressInput {
@@ -73,29 +72,6 @@ export async function POST(request: NextRequest) {
       }
       paymentReference = intent.id;
       paymentMethod = "stripe";
-    } else if (payment.provider === "paypal") {
-      if (!payment.paypalOrderId) {
-        return NextResponse.json({ message: "Missing paypalOrderId." }, { status: 400 });
-      }
-      const order = await getPaypalOrder(payment.paypalOrderId);
-      if (order.status !== "COMPLETED") {
-        return NextResponse.json(
-          { message: `PayPal order not completed (status: ${order.status}).` },
-          { status: 400 }
-        );
-      }
-      const unit = order.purchase_units?.[0];
-      const captured = unit?.payments?.captures?.[0];
-      const amountValue = parseFloat(captured?.amount?.value || unit?.amount?.value || "0");
-      const currency = (captured?.amount?.currency_code || unit?.amount?.currency_code || "").toLowerCase();
-      if (Math.abs(amountValue - priced.totalAmount) > 0.01 || currency !== priced.currency) {
-        return NextResponse.json(
-          { message: "Payment amount/currency mismatch." },
-          { status: 400 }
-        );
-      }
-      paymentReference = order.id;
-      paymentMethod = "paypal";
     } else {
       return NextResponse.json({ message: "Unsupported payment provider." }, { status: 400 });
     }

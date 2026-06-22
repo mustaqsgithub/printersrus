@@ -19,8 +19,6 @@
     "test:applitools": "npx playwright test tests/applitools-visual.spec.ts"
   },
   "dependencies": {
-    "@paypal/paypal-server-sdk": "^2.3.0",
-    "@paypal/react-paypal-js": "^9.2.0",
     "@prisma/client": "^7.0.1",
     "@stripe/react-stripe-js": "^6.3.0",
     "@stripe/stripe-js": "^9.3.1",
