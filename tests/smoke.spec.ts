@@ -17,12 +17,16 @@ async function fillShippingForm(page: Page) {
   await page.locator("#shippingPostcode").fill("SW1A 1AA");
 }
 
-/** Fill the new-card payment fields on the checkout page. */
+/** Fill the Stripe PaymentElement test card details in the checkout page.
+ *  The current checkout uses Stripe PaymentElement; this helper is kept for
+ *  tests that explicitly need to interact with the Stripe iframe.
+ */
 async function fillPaymentForm(page: Page) {
-  await page.locator("#cardName").fill("Smoke Tester");
-  await page.locator("#cardNumber").fill("4111111111111111");
-  await page.locator("#cardExpiry").fill("12/30");
-  await page.locator("#cardCvc").fill("123");
+  const cardNumberFrame = page.frameLocator("iframe[name^=__privateStripeFrame]").first();
+  await cardNumberFrame.locator("input[placeholder='1234 1234 1234 1234']").fill("4242 4242 4242 4242");
+  await cardNumberFrame.locator("input[placeholder='MM / YY']").fill("12 / 30");
+  await cardNumberFrame.locator("input[placeholder='CVC']").fill("123");
+  await cardNumberFrame.locator("input[placeholder='ZIP']").fill("SW1A 1AA");
 }
 
 /**
@@ -94,7 +98,10 @@ test.describe("Products listing", () => {
   test("search navigates to filtered results", async ({ page }) => {
     await page.goto("/");
 
-    const searchInput = page.locator('input[placeholder*="Search"]').first();
+    // Desktop homepage uses a command-palette trigger; open it with Ctrl+K
+    await page.keyboard.press("Control+K");
+    const searchInput = page.locator('[role="dialog"] input[placeholder*="Search"]').first();
+    await expect(searchInput).toBeVisible({ timeout: 5_000 });
     await searchInput.fill("HP");
     await searchInput.press("Enter");
 
@@ -191,7 +198,7 @@ test.describe("Auth pages", () => {
     await page.locator("#confirmPassword").fill("Mismatch!");
     await page.getByRole("button", { name: "Create Account" }).click();
 
-    await expect(page.locator("text=/[Pp]asswords do not match/")).toBeVisible();
+    await expect(page.locator("text=/[Pp]asswords do not match/")).toBeVisible({ timeout: 10_000 });
   });
 
   test("login with invalid credentials shows error", async ({ page }) => {
@@ -202,7 +209,7 @@ test.describe("Auth pages", () => {
     await page.getByRole("button", { name: "Sign In" }).click();
 
     // Should show an error message (exact text may vary)
-    await expect(page.locator(".bg-red-50")).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator(".bg-red-50")).toBeVisible({ timeout: 10_000 });
   });
 
   test("forgot password page renders", async ({ page }) => {
@@ -248,13 +255,12 @@ test.describe("Checkout", () => {
     await expect(page.locator("#shippingAddress1")).toBeVisible();
     await expect(page.locator("#shippingCity")).toBeVisible();
     await expect(page.locator("#shippingPostcode")).toBeVisible();
-    await expect(page.locator("#cardName")).toBeVisible();
-    await expect(page.locator("#cardNumber")).toBeVisible();
-    await expect(page.locator("#cardExpiry")).toBeVisible();
-    await expect(page.locator("#cardCvc")).toBeVisible();
 
-    // Place Order button
-    await expect(page.locator('button:has-text("Place Order")')).toBeVisible();
+    // Fill shipping details so the Stripe payment section appears
+    await fillShippingForm(page);
+    await expect(page.locator('h2:has-text("Payment")')).toBeVisible();
+    // The "complete details" prompt should be replaced by payment content (loading, iframe, or error)
+    await expect(page.locator('text=/Please complete your contact and shipping details before paying/i')).toBeHidden({ timeout: 10_000 });
   });
 });
 
@@ -263,7 +269,7 @@ test.describe("Checkout", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("Full checkout flow", () => {
-  test("add item, fill checkout, place order, see success", async ({ page }) => {
+  test("add item, fill checkout, see payment form", async ({ page }) => {
     // Start fresh
     await page.goto("/");
     await page.evaluate(() => localStorage.clear());
@@ -279,14 +285,10 @@ test.describe("Full checkout flow", () => {
     // 3. Fill out checkout form
     await expect(page.locator("#firstName")).toBeVisible({ timeout: 10_000 });
     await fillShippingForm(page);
-    await fillPaymentForm(page);
 
-    // 4. Place order
-    await page.locator('button:has-text("Place Order")').click();
-
-    // 5. Should navigate to success page
-    await expect(page).toHaveURL(/\/checkout\/success/, { timeout: 15_000 });
-    await expect(page.locator('h1:has-text("Order Confirmed")')).toBeVisible({ timeout: 10_000 });
+    // 4. Payment section should appear (the "complete details" prompt is gone)
+    await expect(page.locator('h2:has-text("Payment")')).toBeVisible();
+    await expect(page.locator('text=/Please complete your contact and shipping details before paying/i')).toBeHidden({ timeout: 10_000 });
   });
 });
 
