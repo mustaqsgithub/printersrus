@@ -3,6 +3,7 @@ import { dbHelpers } from "@/lib/database";
 import { getSessionToken } from "@/lib/auth-cookies";
 import { getSessionUser } from "@/lib/auth";
 import { isStaffRole } from "@/lib/roles";
+import crypto from "crypto";
 
 const toApiCategory = (category: any) => ({
   id: category.id,

@@ -56,6 +56,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ message: "Missing paymentIntentId." }, { status: 400 });
       }
       const stripe = getStripe();
+      if (!stripe) {
+        return NextResponse.json(
+          { message: "Stripe is not configured. Please set STRIPE_SECRET_KEY in environment variables." },
+          { status: 503 }
+        );
+      }
       const intent = await stripe.paymentIntents.retrieve(payment.paymentIntentId);
       if (intent.status !== "succeeded") {
         return NextResponse.json(
@@ -72,6 +78,58 @@ export async function POST(request: NextRequest) {
       }
       paymentReference = intent.id;
       paymentMethod = "stripe";
+
+      // Save payment method if user chose to save it and is logged in
+      if (payment.savePaymentMethod && intent.customer && intent.payment_method) {
+        try {
+          const customerId = typeof intent.customer === "string" ? intent.customer : intent.customer.id;
+          const paymentMethodId = typeof intent.payment_method === "string" ? intent.payment_method : intent.payment_method.id;
+          
+          const user = await dbHelpers.getUserByStripeCustomerId(customerId);
+          if (user) {
+            const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+            if (pm.type === "card" && pm.card) {
+              await dbHelpers.addStripePaymentMethod({
+                userId: user.id,
+                stripePaymentMethodId: pm.id,
+                stripeCustomerId: customerId,
+                cardType: pm.card.brand,
+                lastFour: pm.card.last4,
+                expiryMonth: pm.card.exp_month,
+                expiryYear: pm.card.exp_year,
+                cardholderName: pm.billing_details?.name || `${customer.firstName} ${customer.lastName}`,
+              });
+              console.log(`[CHECKOUT] Saved card ****${pm.card.last4} for user ${user.email}`);
+            }
+          }
+        } catch (err) {
+          console.error("[CHECKOUT] Failed to save payment method:", err);
+          // Don't fail the checkout if saving payment method fails
+        }
+      }
+    } else if (payment.provider === "paypal") {
+      if (!payment.paypalOrderId) {
+        return NextResponse.json({ message: "Missing paypalOrderId." }, { status: 400 });
+      }
+      const order = await getPaypalOrder(payment.paypalOrderId);
+      if (order.status !== "COMPLETED") {
+        return NextResponse.json(
+          { message: `PayPal order not completed (status: ${order.status}).` },
+          { status: 400 }
+        );
+      }
+      const unit = order.purchase_units?.[0];
+      const captured = unit?.payments?.captures?.[0];
+      const amountValue = parseFloat(captured?.amount?.value || unit?.amount?.value || "0");
+      const currency = (captured?.amount?.currency_code || unit?.amount?.currency_code || "").toLowerCase();
+      if (Math.abs(amountValue - priced.totalAmount) > 0.01 || currency !== priced.currency) {
+        return NextResponse.json(
+          { message: "Payment amount/currency mismatch." },
+          { status: 400 }
+        );
+      }
+      paymentReference = order.id;
+      paymentMethod = "paypal";
     } else {
       return NextResponse.json({ message: "Unsupported payment provider." }, { status: 400 });
     }

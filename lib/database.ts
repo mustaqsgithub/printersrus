@@ -1100,6 +1100,12 @@ export const dbHelpers = {
     const db = getDb();
     db.prepare(`UPDATE users SET stripe_customer_id = ? WHERE id = ?`).run(stripeCustomerId, userId);
   },
+
+  getUserByStripeCustomerId: async (stripeCustomerId: string): Promise<any | null> => {
+    const db = getDb();
+    const row = db.prepare(`SELECT * FROM users WHERE stripe_customer_id = ?`).get(stripeCustomerId) as any;
+    return row || null;
+  },
 };
 
 // Note: Database initialization should be called explicitly via initDatabase()

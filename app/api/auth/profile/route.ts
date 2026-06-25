@@ -42,7 +42,7 @@ export async function PATCH(request: NextRequest) {
 
   const user = await updateUser(sessionUser.id, {
     ...updates,
-    emailVerifiedAt: emailChanged ? null : sessionUser.email_verified_at,
+    emailVerifiedAt: emailChanged ? null : (sessionUser.email_verified_at ? new Date(sessionUser.email_verified_at) : null),
   });
 
   if (!user) {

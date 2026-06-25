@@ -15,6 +15,13 @@ export async function POST(request: NextRequest) {
     const priced = await priceCart(body.items);
     const stripe = getStripe();
 
+    if (!stripe) {
+      return NextResponse.json(
+        { message: "Stripe is not configured. Please set STRIPE_SECRET_KEY in environment variables." },
+        { status: 503 }
+      );
+    }
+
     // If logged in, attach to a Stripe Customer so saved cards work
     let customerId: string | undefined;
     const token = await getSessionToken();
