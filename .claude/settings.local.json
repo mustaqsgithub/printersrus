@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(docker exec *)",
+      "Bash(curl -s --max-time 10 -H 'Cookie: session_token=3n7Z2g6ABecjom5t9XOFVuVz3iGhdOg5NEBrByEMtnM' http://localhost:3000/api/admin/products/enrich/status)",
+      "Bash(curl -s --max-time 60 -H 'Cookie: session_token=3n7Z2g6ABecjom5t9XOFVuVz3iGhdOg5NEBrByEMtnM' -F 'file=@tmp-test/import1.csv;type=text/csv' http://localhost:3000/api/admin/products/bulk)",
+      "Bash(ls -la *.db data/*.db prisma/*.db)",
+      "Bash(ls .env.local)",
+      "Bash(grep -i \"env\" .gitignore)"
     ]
   }
 }

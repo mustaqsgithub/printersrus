@@ -4,7 +4,6 @@ import { getDb } from "@/lib/db";
 import { sendOrderConfirmationEmail } from "@/lib/email";
 import { priceCart } from "@/lib/pricing";
 import { getStripe, toMinorUnits } from "@/lib/stripe";
-import { getPaypalOrder } from "@/lib/paypal";
 import crypto from "crypto";
 
 interface AddressInput {

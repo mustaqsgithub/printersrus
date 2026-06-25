@@ -6,6 +6,7 @@ import { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useCartStore } from "@/lib/cart-store";
 import { useAuthStore } from "@/lib/auth-store";
+import { isStaffRole } from "@/lib/roles";
 import { Logo } from "@/components/Logo";
 
 export function Header() {
@@ -69,7 +70,7 @@ export function Header() {
         <div className="container mx-auto px-4 text-xs sm:text-sm text-center text-gray-300">
           <span className="inline-flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-primary-400" />
-            <span>Free shipping on orders over £50</span>
+            <span>Free shipping on orders over £250</span>
             <span className="text-gray-500">·</span>
             <span>Customer Support: 1-800-PRINTER</span>
           </span>
@@ -102,7 +103,7 @@ export function Header() {
 
           {/* Actions */}
           <div className="flex items-center gap-1 sm:gap-2">
-            {user?.role === "admin" && (
+            {isStaffRole(user?.role) && (
               <Link
                 href="/admin"
                 className="hidden md:inline-flex px-3 py-1.5 rounded-md text-sm font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 transition"

@@ -33,38 +33,21 @@ type ImageCandidate = {
   height?: number;
 };
 
-type StagedRow = {
-  rowNumber: number;
-  include: boolean;
-  fields: {
-    name: string;
-    sku: string;
-    slug: string;
-    description: string;
-    longDescription: string | null;
-    price: number;
-    salePrice: number | null;
-    brand: string | null;
-    stockQuantity: number;
-    inStock: boolean;
-    featured: boolean;
-    onSale: boolean;
-    isActive: boolean;
-    images: string[];
-  };
-  category: {
-    slug: string;
-    name: string | null;
-    description: string | null;
-    image: string | null;
-    willCreate: boolean;
-  };
-  mainImage: string | null;
-  candidateImages: ImageCandidate[];
-  errors: string[];
+type BulkPhase = "upload" | "importing";
+
+type EnrichCounts = {
+  pending: number;
+  processing: number;
+  done: number;
+  failed: number;
+  total: number;
 };
 
-type BulkPhase = "upload" | "review" | "submitting";
+type ImportSummary = {
+  created: number;
+  updated: number;
+  createdCategories: number;
+};
 
 const emptyForm: Product = {
   id: "",
@@ -82,35 +65,23 @@ const emptyForm: Product = {
   isActive: true,
 };
 
-const validateStagedRow = (row: StagedRow): string[] => {
-  const errors: string[] = [];
-  if (!row.fields.sku?.trim()) errors.push("Missing SKU");
-  if (!row.fields.name?.trim()) errors.push("Missing Name");
-  if (!row.fields.slug?.trim()) errors.push("Missing slug");
-  if (!row.category.slug?.trim()) errors.push("Missing Category");
-  if (row.category.willCreate && !row.category.name?.trim())
-    errors.push("Missing Category name (required to create new category)");
-  if (!row.mainImage?.trim()) errors.push("Missing main image");
-  return errors;
-};
-
 export function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [form, setForm] = useState<Product>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingStagedIndex, setEditingStagedIndex] = useState<number | null>(null);
-  const [stagedCategoryEdit, setStagedCategoryEdit] = useState<{
-    name: string;
-    slug: string;
-    willCreate: boolean;
-  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [bulkPhase, setBulkPhase] = useState<BulkPhase>("upload");
-  const [stagedRows, setStagedRows] = useState<StagedRow[]>([]);
   const [bulkResult, setBulkResult] = useState<string | null>(null);
   const [bulkErrors, setBulkErrors] = useState<Array<{ row: number; message: string }>>([]);
+  const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
+  const [enrichCounts, setEnrichCounts] = useState<EnrichCounts | null>(null);
+  const [enrichRunning, setEnrichRunning] = useState(false);
+  const [isResuming, setIsResuming] = useState(false);
+  // Highest "remaining to enrich" count seen since work started, so the progress
+  // bar tracks the current batch (0→100%) instead of done/all-products.
+  const enrichBaselineRef = useRef(0);
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -119,13 +90,10 @@ export function AdminProducts() {
   const [imageSearchQuery, setImageSearchQuery] = useState("");
   const [imageSearchResults, setImageSearchResults] = useState<ImageCandidate[]>([]);
   const [imageSearchLoading, setImageSearchLoading] = useState(false);
-  // "form" = picker is targeting the create/edit form; number = staged row at that index
-  const [imagePickerTarget, setImagePickerTarget] = useState<"form" | number>("form");
   const { toast } = useToast();
   const formRef = useRef<HTMLDivElement | null>(null);
 
   const isEditing = useMemo(() => Boolean(editingId), [editingId]);
-  const isStagedEdit = useMemo(() => editingStagedIndex !== null, [editingStagedIndex]);
 
   const handleImageSearch = async (query?: string) => {
     const q = query || imageSearchQuery || form.name;
@@ -134,7 +102,6 @@ export function AdminProducts() {
       return;
     }
     setImageSearchQuery(q);
-    setImagePickerTarget("form");
     setImageSearchOpen(true);
     setImageSearchLoading(true);
     setImageSearchResults([]);
@@ -147,16 +114,6 @@ export function AdminProducts() {
     } finally {
       setImageSearchLoading(false);
     }
-  };
-
-  const openStagedImagePicker = (index: number) => {
-    const row = stagedRows[index];
-    if (!row) return;
-    setImagePickerTarget(index);
-    setImageSearchQuery(row.fields.name);
-    setImageSearchResults(row.candidateImages || []);
-    setImageSearchLoading(false);
-    setImageSearchOpen(true);
   };
 
   const handlePickerSearch = async (query: string) => {
@@ -178,20 +135,8 @@ export function AdminProducts() {
   };
 
   const selectImage = (url: string) => {
-    if (imagePickerTarget === "form") {
-      handleChange("mainImage", url);
-    } else {
-      const idx = imagePickerTarget;
-      setStagedRows((prev) =>
-        prev.map((row, i) => {
-          if (i !== idx) return row;
-          const next = { ...row, mainImage: url };
-          return { ...next, errors: validateStagedRow(next) };
-        })
-      );
-    }
+    handleChange("mainImage", url);
     setImageSearchOpen(false);
-    setImagePickerTarget("form");
   };
 
   const loadProducts = async () => {
@@ -224,8 +169,6 @@ export function AdminProducts() {
   const resetForm = () => {
     setForm(emptyForm);
     setEditingId(null);
-    setEditingStagedIndex(null);
-    setStagedCategoryEdit(null);
     setError(null);
     setIsFormOpen(false);
   };
@@ -233,58 +176,6 @@ export function AdminProducts() {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
-
-    if (isStagedEdit && editingStagedIndex !== null) {
-      const idx = editingStagedIndex;
-      setStagedRows((prev) =>
-        prev.map((row, i) => {
-          if (i !== idx) return row;
-          const updatedFields = {
-            ...row.fields,
-            name: form.name,
-            sku: form.sku,
-            slug: form.slug,
-            description: form.description,
-            price: Number(form.price) || 0,
-            salePrice: form.onSale && form.salePrice ? Number(form.salePrice) : null,
-            stockQuantity: Number(form.stockQuantity) || 0,
-            inStock: (Number(form.stockQuantity) || 0) > 0,
-            featured: form.featured,
-            onSale: form.onSale,
-            isActive: form.isActive,
-          };
-          let updatedCategory = row.category;
-          if (stagedCategoryEdit) {
-            updatedCategory = {
-              ...row.category,
-              name: stagedCategoryEdit.name || row.category.name,
-              slug: stagedCategoryEdit.slug || row.category.slug,
-              willCreate: stagedCategoryEdit.willCreate,
-            };
-          } else if (form.categoryId) {
-            const picked = categories.find((c) => c.id === form.categoryId);
-            if (picked) {
-              updatedCategory = {
-                ...row.category,
-                slug: picked.slug,
-                name: picked.name,
-                willCreate: false,
-              };
-            }
-          }
-          const next: StagedRow = {
-            ...row,
-            fields: updatedFields,
-            category: updatedCategory,
-            mainImage: form.mainImage || row.mainImage,
-          };
-          return { ...next, errors: validateStagedRow(next) };
-        })
-      );
-      toast({ title: "Row updated", variant: "success" });
-      resetForm();
-      return;
-    }
 
     const payload = {
       ...form,
@@ -317,41 +208,10 @@ export function AdminProducts() {
       salePrice: product.salePrice ?? null,
     });
     setEditingId(product.id);
-    setEditingStagedIndex(null);
-    setStagedCategoryEdit(null);
     setIsFormOpen(true);
     requestAnimationFrame(() => {
       formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
-  };
-
-  const handleEditStaged = (index: number) => {
-    const row = stagedRows[index];
-    if (!row) return;
-    const existingCat = categories.find((c) => c.slug === row.category.slug);
-    setForm({
-      id: "",
-      name: row.fields.name,
-      slug: row.fields.slug,
-      sku: row.fields.sku,
-      description: row.fields.description,
-      price: row.fields.price,
-      salePrice: row.fields.salePrice ?? null,
-      mainImage: row.mainImage || "",
-      categoryId: existingCat?.id || "",
-      stockQuantity: row.fields.stockQuantity,
-      featured: row.fields.featured,
-      onSale: row.fields.onSale,
-      isActive: row.fields.isActive,
-    });
-    setEditingId(null);
-    setEditingStagedIndex(index);
-    setStagedCategoryEdit({
-      name: row.category.name || "",
-      slug: row.category.slug,
-      willCreate: row.category.willCreate || !existingCat,
-    });
-    setIsFormOpen(true);
   };
 
   const handleDelete = async (id: string) => {
@@ -384,7 +244,6 @@ export function AdminProducts() {
       "OnSale",
       "Featured",
       "IsActive",
-      "MainImage",
       "Images",
     ];
     const sampleRows: string[][] = [
@@ -402,7 +261,6 @@ export function AdminProducts() {
         "false",
         "true",
         "",
-        "",
       ],
       [
         "189/46",
@@ -417,7 +275,6 @@ export function AdminProducts() {
         "false",
         "false",
         "true",
-        "",
         "",
       ],
     ];
@@ -434,10 +291,38 @@ export function AdminProducts() {
     URL.revokeObjectURL(url);
   };
 
-  const handleBulkPreview = async (event: React.FormEvent<HTMLFormElement>) => {
+  const refreshEnrichStatus = async () => {
+    try {
+      const res = await fetch("/api/admin/products/enrich/status");
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.counts) {
+        setEnrichCounts(data.counts);
+        const remaining = (data.counts.pending || 0) + (data.counts.processing || 0);
+        if (remaining > enrichBaselineRef.current) enrichBaselineRef.current = remaining;
+        else if (remaining === 0) enrichBaselineRef.current = 0;
+      }
+      setEnrichRunning(Boolean(data?.running));
+    } catch {
+      // Non-fatal; the next poll will retry.
+    }
+  };
+
+  // Poll enrichment progress while the bulk panel is open and work remains.
+  useEffect(() => {
+    if (!isBulkOpen) return;
+    refreshEnrichStatus();
+    const interval = setInterval(() => {
+      refreshEnrichStatus();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [isBulkOpen]);
+
+  const handleBulkImport = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setBulkResult(null);
     setBulkErrors([]);
+    setImportSummary(null);
 
     if (!bulkFile) {
       toast({ title: "Upload failed", message: "Please select a CSV file.", variant: "error" });
@@ -445,6 +330,7 @@ export function AdminProducts() {
     }
 
     setIsUploading(true);
+    setBulkPhase("importing");
     const formData = new FormData();
     formData.append("file", bulkFile);
 
@@ -456,102 +342,67 @@ export function AdminProducts() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         toast({
-          title: "Preview failed",
-          message: data?.message || "Failed to preview CSV.",
+          title: "Import failed",
+          message: data?.message || "Failed to import CSV.",
           variant: "error",
         });
+        setBulkPhase("upload");
         return;
       }
-      const rows: StagedRow[] = (data.rows || []).map((row: StagedRow) => ({
-        ...row,
-        errors: validateStagedRow(row),
-      }));
-      setStagedRows(rows);
-      setBulkPhase("review");
+
+      setImportSummary({
+        created: data.created || 0,
+        updated: data.updated || 0,
+        createdCategories: data.createdCategories || 0,
+      });
+      setBulkResult(
+        `Imported ${data.created || 0} new product(s), updated ${data.updated || 0}, created ${
+          data.createdCategories || 0
+        } category(ies).`
+      );
+      setBulkErrors(data.errors || []);
       toast({
-        title: `Previewed ${rows.length} rows`,
-        message: "Review and confirm to import.",
+        title: "Import complete",
+        message:
+          (data.pendingEnrichment || 0) > 0
+            ? `Fetching images & details for ${data.pendingEnrichment} new item(s) in the background.`
+            : "No new items needed enrichment.",
         variant: "success",
       });
+      setBulkFile(null);
+      setBulkPhase("upload");
+      await loadProducts();
+      await loadCategories();
+      await refreshEnrichStatus();
     } catch {
-      toast({ title: "Preview failed", message: "Network error.", variant: "error" });
+      toast({ title: "Import failed", message: "Network error.", variant: "error" });
+      setBulkPhase("upload");
     } finally {
       setIsUploading(false);
     }
   };
 
-  const handleBulkConfirm = async () => {
-    const includedRows = stagedRows.filter((r) => r.include);
-    const rowsWithErrors = includedRows.filter((r) => r.errors.length > 0);
-    if (includedRows.length === 0) {
-      toast({ title: "Select at least one row to import", variant: "error" });
-      return;
-    }
-    if (rowsWithErrors.length > 0) {
-      toast({
-        title: "Cannot import",
-        message: `${rowsWithErrors.length} included row(s) still have errors. Edit or deselect them first.`,
-        variant: "error",
-      });
-      return;
-    }
-
-    setBulkPhase("submitting");
+  const handleResumeEnrichment = async () => {
+    setIsResuming(true);
     try {
-      const response = await fetch("/api/admin/products/bulk/confirm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: includedRows }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        toast({
-          title: "Import failed",
-          message: data?.message || "Failed to import.",
-          variant: "error",
-        });
-        setBulkPhase("review");
+      const res = await fetch("/api/admin/products/enrich/resume", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({ title: "Could not resume", message: data?.message || "Failed.", variant: "error" });
         return;
       }
-      setBulkResult(
-        `Imported ${data.createdProducts || 0} products, created ${data.createdCategories || 0} categories.`
-      );
-      setBulkErrors(data.errors || []);
+      if (data?.counts) setEnrichCounts(data.counts);
       toast({
-        title: "Import completed",
-        message: `Imported ${data.createdProducts || 0} products.`,
+        title: "Enrichment resumed",
+        message: `Re-queued ${data.requeued || 0} item(s).`,
         variant: "success",
       });
-      setStagedRows([]);
-      setBulkFile(null);
-      setBulkPhase("upload");
-      await loadProducts();
-      await loadCategories();
+      await refreshEnrichStatus();
     } catch {
-      toast({ title: "Import failed", message: "Network error.", variant: "error" });
-      setBulkPhase("review");
+      toast({ title: "Could not resume", message: "Network error.", variant: "error" });
+    } finally {
+      setIsResuming(false);
     }
-  };
-
-  const toggleRowInclude = (index: number) =>
-    setStagedRows((prev) =>
-      prev.map((r, i) => (i === index ? { ...r, include: !r.include } : r))
-    );
-
-  const setAllInclude = (value: boolean) =>
-    setStagedRows((prev) =>
-      prev.map((r) => ({ ...r, include: value && r.errors.length === 0 ? true : value ? r.include : false }))
-    );
-
-  const includedCount = stagedRows.filter((r) => r.include).length;
-  const erroredIncludedCount = stagedRows.filter((r) => r.include && r.errors.length > 0).length;
-
-  const resetBulk = () => {
-    setStagedRows([]);
-    setBulkFile(null);
-    setBulkPhase("upload");
-    setBulkResult(null);
-    setBulkErrors([]);
   };
 
   return (
@@ -577,8 +428,6 @@ export function AdminProducts() {
             onClick={() => {
               setForm(emptyForm);
               setEditingId(null);
-              setEditingStagedIndex(null);
-              setStagedCategoryEdit(null);
               setIsFormOpen(true);
               setIsBulkOpen(false);
             }}
@@ -604,11 +453,7 @@ export function AdminProducts() {
           <div className="w-full max-w-3xl rounded-2xl bg-white p-6 shadow-xl max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">
-                {isStagedEdit
-                  ? `Edit Row ${stagedRows[editingStagedIndex!]?.rowNumber}`
-                  : isEditing
-                    ? "Edit Product"
-                    : "Add Product"}
+                {isEditing ? "Edit Product" : "Add Product"}
               </h3>
               <button
                 type="button"
@@ -648,59 +493,19 @@ export function AdminProducts() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-900 mb-1">Category</label>
-                {isStagedEdit && stagedCategoryEdit?.willCreate ? (
-                  <div className="space-y-2">
-                    <input
-                      value={stagedCategoryEdit.name}
-                      onChange={(e) =>
-                        setStagedCategoryEdit((prev) =>
-                          prev ? { ...prev, name: e.target.value } : prev
-                        )
-                      }
-                      placeholder="New category name"
-                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900"
-                    />
-                    <input
-                      value={stagedCategoryEdit.slug}
-                      onChange={(e) =>
-                        setStagedCategoryEdit((prev) =>
-                          prev ? { ...prev, slug: e.target.value } : prev
-                        )
-                      }
-                      placeholder="New category slug"
-                      className="w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900"
-                    />
-                    <p className="text-xs text-amber-700">
-                      This category will be created on confirm.
-                    </p>
-                  </div>
-                ) : (
-                  <select
-                    value={form.categoryId}
-                    onChange={(event) => {
-                      handleChange("categoryId", event.target.value);
-                      if (isStagedEdit) {
-                        const picked = categories.find((c) => c.id === event.target.value);
-                        if (picked) {
-                          setStagedCategoryEdit({
-                            name: picked.name,
-                            slug: picked.slug,
-                            willCreate: false,
-                          });
-                        }
-                      }
-                    }}
-                    required={!isStagedEdit}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900"
-                  >
-                    <option value="">Select a category</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                <select
+                  value={form.categoryId}
+                  onChange={(event) => handleChange("categoryId", event.target.value)}
+                  required
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900"
+                >
+                  <option value="">Select a category</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-900 mb-1">Description</label>
@@ -820,7 +625,7 @@ export function AdminProducts() {
                   type="submit"
                   className="px-4 py-2 bg-primary-600 text-white rounded-md font-semibold hover:bg-primary-700"
                 >
-                  {isStagedEdit ? "Save row" : isEditing ? "Save changes" : "Add product"}
+                  {isEditing ? "Save changes" : "Add product"}
                 </button>
                 <button
                   type="button"
@@ -839,17 +644,10 @@ export function AdminProducts() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-4xl max-h-[85vh] rounded-2xl bg-white shadow-xl flex flex-col">
             <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="text-lg font-semibold text-gray-900">
-                {imagePickerTarget === "form"
-                  ? "Search Product Image"
-                  : `Pick image for row ${stagedRows[imagePickerTarget as number]?.rowNumber ?? ""}`}
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900">Search Product Image</h3>
               <button
                 type="button"
-                onClick={() => {
-                  setImageSearchOpen(false);
-                  setImagePickerTarget("form");
-                }}
+                onClick={() => setImageSearchOpen(false)}
                 className="text-sm text-gray-500 hover:text-gray-700"
               >
                 Close
@@ -920,14 +718,15 @@ export function AdminProducts() {
         </div>
       )}
 
-      {isBulkOpen && bulkPhase === "upload" && (
-        <div className="border border-gray-200 rounded-xl p-6 bg-gray-50">
+      {isBulkOpen && (
+        <div className="border border-gray-200 rounded-xl p-6 bg-gray-50 space-y-6">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-xl font-semibold text-gray-900">Bulk Import (CSV)</h2>
               <p className="text-sm text-gray-600">
-                Upload a CSV. We&apos;ll auto-fetch a product image per row from DuckDuckGo, then
-                let you review every item before importing.
+                New items are imported instantly with a placeholder image, then images, features
+                and specifications are fetched in the background. Re-uploading updates price, stock
+                and details for existing SKUs &mdash; no re-fetching.
               </p>
             </div>
             <button
@@ -939,33 +738,25 @@ export function AdminProducts() {
             </button>
           </div>
 
-          <div className="mt-4 grid gap-3 text-sm text-gray-600">
+          <div className="grid gap-3 text-sm text-gray-600">
             <p>
               Required columns:{" "}
               <span className="font-semibold text-gray-900">SKU, Name, Price, Category</span>
             </p>
             <p>
-              Optional: Stock, Brand, Description, MainImage, Slug, SalePrice, InStock, Featured,
-              OnSale, IsActive, LongDescription, Images, CategoryDescription, CategoryImage.
-              Column names are case-insensitive (e.g. <code>SKU</code>, <code>sku</code>, and{" "}
-              <code>Sku</code> all work). <code>Product_ID</code> is accepted and ignored.
+              Optional: Stock, Brand, Description, Slug, SalePrice, InStock, Featured, OnSale,
+              IsActive, LongDescription, Images, CategoryDescription, CategoryImage. Column names
+              are case-insensitive. <code>Product_ID</code> is accepted and ignored.
             </p>
             <p>
-              <span className="font-semibold text-gray-900">Category</span> can be a display name
-              (e.g. <em>&quot;Sticky Notes&quot;</em>) or a slug. We slugify it automatically. New
-              categories are created on confirm.
+              Items are matched by <span className="font-semibold text-gray-900">SKU</span>: an
+              existing SKU is updated (price/stock/fields), a new SKU is imported and queued for
+              image &amp; detail enrichment. Any number of rows is supported &mdash; items are
+              written in batches and images/specifications are fetched in the background.
             </p>
-            <p>
-              <span className="font-semibold text-gray-900">MainImage</span> is optional. If
-              omitted, an image is auto-picked from a DuckDuckGo search using the row&apos;s{" "}
-              <span className="font-semibold text-gray-900">Description</span> if present,
-              otherwise the <span className="font-semibold text-gray-900">Name</span>. You can
-              swap it in the review step.
-            </p>
-            <p>Max 100 rows per upload.</p>
           </div>
 
-          <form onSubmit={handleBulkPreview} className="mt-5 flex flex-col gap-4">
+          <form onSubmit={handleBulkImport} className="flex flex-col gap-4">
             <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-lg p-6 text-sm text-gray-600 bg-white cursor-pointer hover:border-primary-500">
               <span className="font-semibold text-gray-900">
                 {bulkFile ? bulkFile.name : "Click to choose a CSV file"}
@@ -980,197 +771,90 @@ export function AdminProducts() {
             </label>
             <button
               type="submit"
-              disabled={isUploading}
+              disabled={isUploading || bulkPhase === "importing"}
               className="w-fit px-5 py-2.5 bg-primary-600 text-white rounded-md font-semibold hover:bg-primary-700 disabled:opacity-60"
             >
-              {isUploading ? "Fetching images... this may take a minute" : "Preview & fetch images"}
+              {bulkPhase === "importing" ? "Importing..." : "Import CSV"}
             </button>
           </form>
 
-          {bulkResult && <p className="text-sm text-green-700 mt-3">{bulkResult}</p>}
+          {bulkResult && (
+            <div className="rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+              <p className="font-semibold">{bulkResult}</p>
+              {importSummary && importSummary.created > 0 && (
+                <p className="mt-1 text-green-700">
+                  Image, features and specifications for the {importSummary.created} new item(s)
+                  are being fetched in the background.
+                </p>
+              )}
+            </div>
+          )}
+
           {bulkErrors.length > 0 && (
-            <div className="mt-3 text-sm text-red-700">
-              <p className="font-semibold">Import errors:</p>
-              <ul className="list-disc pl-5">
-                {bulkErrors.slice(0, 5).map((err) => (
+            <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              <p className="font-semibold">{bulkErrors.length} row(s) skipped:</p>
+              <ul className="list-disc pl-5 mt-1">
+                {bulkErrors.slice(0, 8).map((err) => (
                   <li key={`${err.row}-${err.message}`}>
                     Row {err.row}: {err.message}
                   </li>
                 ))}
               </ul>
-              {bulkErrors.length > 5 && (
+              {bulkErrors.length > 8 && (
                 <p className="mt-1 text-xs text-red-600">
-                  {bulkErrors.length - 5} more error(s) not shown.
+                  {bulkErrors.length - 8} more error(s) not shown.
                 </p>
               )}
             </div>
           )}
-        </div>
-      )}
 
-      {isBulkOpen && (bulkPhase === "review" || bulkPhase === "submitting") && (
-        <div className="border border-gray-200 rounded-xl p-6 bg-gray-50">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Review staged products</h2>
-              <p className="text-sm text-gray-600">
-                {stagedRows.length} row(s) staged. {includedCount} selected for import.
-                {erroredIncludedCount > 0 && (
-                  <span className="text-red-600 font-semibold">
-                    {" "}
-                    {erroredIncludedCount} selected row(s) have errors and must be fixed.
-                  </span>
-                )}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setAllInclude(true)}
-                className="px-3 py-1.5 text-xs font-semibold border border-gray-300 rounded-md bg-white hover:bg-gray-100"
-              >
-                Select all
-              </button>
-              <button
-                type="button"
-                onClick={() => setAllInclude(false)}
-                className="px-3 py-1.5 text-xs font-semibold border border-gray-300 rounded-md bg-white hover:bg-gray-100"
-              >
-                Deselect all
-              </button>
-              <button
-                type="button"
-                onClick={resetBulk}
-                disabled={bulkPhase === "submitting"}
-                className="px-3 py-1.5 text-xs font-semibold border border-gray-300 rounded-md bg-white hover:bg-gray-100 disabled:opacity-50"
-              >
-                Discard & re-upload
-              </button>
-              <button
-                type="button"
-                onClick={handleBulkConfirm}
-                disabled={
-                  bulkPhase === "submitting" ||
-                  includedCount === 0 ||
-                  erroredIncludedCount > 0
-                }
-                className="px-4 py-1.5 text-sm font-semibold bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-60"
-              >
-                {bulkPhase === "submitting"
-                  ? "Importing..."
-                  : `Confirm import (${includedCount})`}
-              </button>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto bg-white rounded-md border border-gray-200">
-            <table className="min-w-full text-sm text-left">
-              <thead className="bg-gray-50 text-gray-700">
-                <tr>
-                  <th className="px-3 py-2 border-b w-10"></th>
-                  <th className="px-3 py-2 border-b w-20">Row</th>
-                  <th className="px-3 py-2 border-b">Image</th>
-                  <th className="px-3 py-2 border-b">Name / SKU</th>
-                  <th className="px-3 py-2 border-b">Price / Stock</th>
-                  <th className="px-3 py-2 border-b">Category</th>
-                  <th className="px-3 py-2 border-b">Issues</th>
-                  <th className="px-3 py-2 border-b">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stagedRows.map((row, index) => {
-                  const hasErrors = row.errors.length > 0;
-                  return (
-                    <tr
-                      key={`${row.rowNumber}-${index}`}
-                      className={`border-b ${row.include ? "" : "opacity-50"} ${
-                        hasErrors && row.include ? "bg-red-50" : ""
-                      }`}
+          {/* Background enrichment progress (tracks the current batch) */}
+          {(() => {
+            if (!enrichCounts) return null;
+            const remaining = enrichCounts.pending + enrichCounts.processing;
+            const baseline = Math.max(enrichBaselineRef.current, remaining);
+            if (baseline === 0 && enrichCounts.failed === 0) return null;
+            const enrichedThisBatch = Math.max(0, baseline - remaining);
+            const pct = baseline > 0 ? Math.round((enrichedThisBatch / baseline) * 100) : 100;
+            const canResume =
+              enrichCounts.failed > 0 || (!enrichRunning && remaining > 0);
+            return (
+              <div className="rounded-md border border-gray-200 bg-white p-4">
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">
+                      Background enrichment
+                      {enrichRunning && (
+                        <span className="ml-2 text-xs font-normal text-primary-600">running…</span>
+                      )}
+                    </h3>
+                    <p className="text-xs text-gray-600 mt-1">
+                      {enrichedThisBatch} of {baseline} enriched · {remaining} remaining
+                      {enrichCounts.failed > 0 && (
+                        <span className="text-red-600"> · {enrichCounts.failed} failed</span>
+                      )}
+                    </p>
+                  </div>
+                  {canResume && (
+                    <button
+                      type="button"
+                      onClick={handleResumeEnrichment}
+                      disabled={isResuming}
+                      className="px-3 py-1.5 text-xs font-semibold border border-gray-300 rounded-md bg-white hover:bg-gray-100 disabled:opacity-60"
                     >
-                      <td className="px-3 py-2 align-top">
-                        <input
-                          type="checkbox"
-                          checked={row.include}
-                          onChange={() => toggleRowInclude(index)}
-                        />
-                      </td>
-                      <td className="px-3 py-2 align-top text-gray-600">{row.rowNumber}</td>
-                      <td className="px-3 py-2 align-top">
-                        <button
-                          type="button"
-                          onClick={() => openStagedImagePicker(index)}
-                          className="block group relative h-16 w-16 rounded border border-gray-200 bg-gray-50 overflow-hidden hover:border-primary-500"
-                          title="Click to change image"
-                        >
-                          {row.mainImage ? (
-                            <img
-                              src={row.mainImage}
-                              alt={row.fields.name}
-                              className="h-full w-full object-contain"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.visibility = "hidden";
-                              }}
-                            />
-                          ) : (
-                            <span className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-500 text-center px-1">
-                              No image
-                            </span>
-                          )}
-                          <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-white text-[10px] font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
-                            Change
-                          </span>
-                        </button>
-                        <p className="text-[10px] text-gray-400 mt-0.5">
-                          {row.candidateImages.length} options
-                        </p>
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <p className="font-medium text-gray-900">
-                          {row.fields.name || <span className="text-red-600">(missing)</span>}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {row.fields.sku || <span className="text-red-600">(no SKU)</span>}
-                        </p>
-                      </td>
-                      <td className="px-3 py-2 align-top text-gray-700">
-                        <p>£{row.fields.price?.toFixed(2) ?? "0.00"}</p>
-                        <p className="text-xs text-gray-500">Stock: {row.fields.stockQuantity}</p>
-                      </td>
-                      <td className="px-3 py-2 align-top text-gray-700">
-                        <p>{row.category.slug || <span className="text-red-600">(missing)</span>}</p>
-                        {row.category.willCreate && (
-                          <span className="inline-block mt-1 text-[10px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
-                            New: {row.category.name || "—"}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        {hasErrors ? (
-                          <ul className="text-xs text-red-700 space-y-0.5 list-disc pl-4">
-                            {row.errors.map((err, i) => (
-                              <li key={i}>{err}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <span className="text-xs text-green-700 font-semibold">OK</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 align-top">
-                        <button
-                          type="button"
-                          onClick={() => handleEditStaged(index)}
-                          disabled={bulkPhase === "submitting"}
-                          className="text-primary-600 hover:text-primary-700 font-semibold disabled:opacity-60"
-                        >
-                          Edit
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      {isResuming ? "Resuming…" : "Retry / resume"}
+                    </button>
+                  )}
+                </div>
+                <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                  <div
+                    className="h-full bg-primary-600 transition-all"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 

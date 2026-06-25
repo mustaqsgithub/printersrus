@@ -12,6 +12,11 @@ services:
       dockerfile: Dockerfile.dev
     ports:
       - "3000:3000"
+    # Loads SMTP_* / SUPER_ADMIN_EMAIL etc. from the gitignored .env.local so
+    # secrets stay out of git. The explicit `environment:` block below still
+    # wins for any keys it also sets.
+    env_file:
+      - .env.local
     environment:
       NODE_ENV: development
       NEXT_PUBLIC_BASE_URL: http://localhost:3000

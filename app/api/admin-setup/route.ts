@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { initDatabase } from "@/lib/database";
-import { createAdminUser, getUserByEmail, isAdminRegistered } from "@/lib/auth";
+import { createAdminUser, getUserByEmail, isAdminRegistered, resolveOwnerRole } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
       email,
       phone,
       password,
+      role: resolveOwnerRole(email),
     });
 
     return NextResponse.json({ user: admin });

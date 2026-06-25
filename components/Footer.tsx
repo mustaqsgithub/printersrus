@@ -119,7 +119,7 @@ export function Footer() {
           <div className="border-t border-gray-200 mt-10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-gray-500">
             <p>&copy; {currentYear} {STORE_NAME}. All rights reserved.</p>
             <p className="text-xs text-gray-500">
-              Secure payments · Stripe · PayPal · Apple Pay
+              Secure payments · Stripe · Apple Pay
             </p>
           </div>
         </div>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Lock, Mail } from "lucide-react";
 import { useAuthStore } from "@/lib/auth-store";
+import { isStaffRole } from "@/lib/roles";
 import { useToast } from "@/components/ToastProvider";
 import { PasswordInput } from "@/components/PasswordInput";
 
@@ -30,9 +31,10 @@ export default function LoginPage() {
     setVerificationUrl(null);
     setIsSubmitting(true);
     try {
-      await signIn({ email: formData.email.trim(), password: formData.password });
+      const user = await signIn({ email: formData.email.trim(), password: formData.password });
       toast({ title: "Signed in", message: "Welcome back!", variant: "success" });
-      router.push("/account");
+      // Staff go straight to their admin portal; customers go to the storefront.
+      router.push(isStaffRole(user.role) ? "/admin" : "/");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to sign in.";
       setError(message);

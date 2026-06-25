@@ -30,7 +30,7 @@ interface AuthStore {
   user: AuthUser | null;
   isLoading: boolean;
   signUp: (input: SignUpInput) => Promise<{ user: AuthUser; verificationUrl?: string }>;
-  signIn: (input: SignInInput) => Promise<void>;
+  signIn: (input: SignInInput) => Promise<AuthUser>;
   signOut: () => Promise<void>;
   updateProfile: (
     updates: Partial<Omit<AuthUser, "id" | "dateJoined" | "role" | "emailVerified">>
@@ -87,6 +87,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
       );
       set({ user: data.user });
       syncCartUser(data.user?.id || null);
+      return data.user as AuthUser;
     } finally {
       set({ isLoading: false });
     }

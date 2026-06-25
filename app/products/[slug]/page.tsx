@@ -56,9 +56,13 @@ export default async function ProductPage({ params }: ProductPageProps) {
     mainImage: dbProduct.main_image,
     images: dbProduct.images,
     brand: dbProduct.brand,
+    weight: dbProduct.weight,
+    dimensions: dbProduct.dimensions,
     categoryId: dbProduct.category_id,
     inStock: Boolean(dbProduct.in_stock),
     stockQuantity: dbProduct.stock_quantity,
+    features: dbProduct.features,
+    specifications: dbProduct.specifications,
     featured: Boolean(dbProduct.featured),
     onSale: Boolean(dbProduct.on_sale),
     isActive: Boolean(dbProduct.is_active),
@@ -77,6 +81,21 @@ export default async function ProductPage({ params }: ProductPageProps) {
   // Parse images from JSON
   const additionalImages = product.images ? JSON.parse(product.images) : [];
   const allImages = [product.mainImage, ...additionalImages];
+
+  // Scraped features/specifications (populated by the bulk-import enrichment
+  // worker). Parse defensively — these are stored as JSON text.
+  const parseJsonSafe = <T,>(value: unknown, fallback: T): T => {
+    if (typeof value !== "string" || !value.trim()) return fallback;
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return fallback;
+    }
+  };
+  const scrapedFeatures = parseJsonSafe<string[]>(product.features, []).filter(
+    (f) => typeof f === "string" && f.trim()
+  );
+  const scrapedSpecs = parseJsonSafe<Record<string, string>>(product.specifications, {});
 
   // Get related products (same category, excluding current)
   const allProducts = await dbHelpers.getAllProducts();
@@ -210,13 +229,25 @@ export default async function ProductPage({ params }: ProductPageProps) {
             <AddToCartButton product={product} />
           </div>
 
+          {/* Key features (scraped) */}
+          {scrapedFeatures.length > 0 && (
+            <div className="border-t border-gray-200 pt-6 mb-6">
+              <h2 className="text-lg font-semibold mb-3 text-gray-900">Key Features</h2>
+              <ul className="list-disc pl-5 space-y-1 text-gray-700">
+                {scrapedFeatures.map((feature, i) => (
+                  <li key={i}>{feature}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Features */}
           <div className="border-t border-gray-200 pt-6 space-y-3">
             <div className="flex items-center gap-3 text-gray-900">
               <Truck size={24} className="text-primary-600" />
               <div>
                 <p className="font-semibold text-gray-900">Free Shipping</p>
-                <p className="text-sm text-gray-900">On orders over £50</p>
+                <p className="text-sm text-gray-900">On orders over £250</p>
               </div>
             </div>
             <div className="flex items-center gap-3 text-gray-900">
@@ -229,6 +260,42 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
         </div>
       </div>
+
+      {/* Specifications */}
+      {(() => {
+        const specs = [
+          { label: "Brand", value: product.brand },
+          { label: "SKU", value: product.sku },
+          { label: "Weight", value: product.weight != null ? `${product.weight} kg` : null },
+          { label: "Dimensions", value: product.dimensions },
+          // Merge in scraped specifications (skip keys already covered above).
+          ...Object.entries(scrapedSpecs)
+            .filter(([label]) => !["brand", "sku", "weight", "dimensions"].includes(label.toLowerCase()))
+            .map(([label, value]) => ({ label, value })),
+        ].filter((s) => s.value);
+
+        if (specs.length === 0) return null;
+
+        return (
+          <div className="mb-16 max-w-4xl">
+            <h2 className="text-2xl font-bold mb-4 text-gray-900">Specifications</h2>
+            <div className="overflow-hidden rounded-lg border border-gray-200">
+              <table className="w-full text-sm">
+                <tbody>
+                  {specs.map((spec, i) => (
+                    <tr key={spec.label} className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}>
+                      <th className="w-1/3 px-4 py-3 text-left font-semibold text-gray-900 align-top">
+                        {spec.label}
+                      </th>
+                      <td className="px-4 py-3 text-gray-700">{spec.value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Long Description */}
       {product.longDescription && (

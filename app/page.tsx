@@ -1,15 +1,9 @@
 import Link from "next/link";
-import { Truck, RotateCcw, ShieldCheck, Headphones, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { FeaturedProducts } from "@/components/FeaturedProducts";
 import { CategoryGrid } from "@/components/CategoryGrid";
 import { PromoBanner } from "@/components/PromoBanner";
-
-const perks = [
-  { icon: Truck, title: "Free Shipping", desc: "On orders over £50" },
-  { icon: RotateCcw, title: "30-Day Returns", desc: "Hassle-free exchanges" },
-  { icon: ShieldCheck, title: "Secure Checkout", desc: "Stripe & PayPal protected" },
-  { icon: Headphones, title: "Expert Support", desc: "Real humans, 7 days a week" },
-];
+import { PerksStrip } from "@/components/PerksStrip";
 
 export default function HomePage() {
   return (
@@ -21,25 +15,7 @@ export default function HomePage() {
 
       {/* Feature strip */}
       <section className="mb-14">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          {perks.map((p) => {
-            const Icon = p.icon;
-            return (
-              <div
-                key={p.title}
-                className="flex items-center gap-3 rounded-xl bg-white border border-gray-200 p-4 hover:border-gray-300 transition"
-              >
-                <div className="w-10 h-10 rounded-lg bg-gray-100 text-gray-700 flex items-center justify-center shrink-0">
-                  <Icon size={18} />
-                </div>
-                <div>
-                  <div className="font-semibold text-gray-900 text-sm">{p.title}</div>
-                  <div className="text-xs text-gray-500">{p.desc}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <PerksStrip />
       </section>
 
       {/* Category Grid */}
