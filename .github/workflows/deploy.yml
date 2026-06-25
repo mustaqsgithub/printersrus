@@ -18,7 +18,7 @@ jobs:
     needs: test
     if: always() # Continue deployment even if tests fail
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     environment: production
 
     steps:
@@ -28,6 +28,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 30m
           script: |
             set -e
             cd /opt/printersrus
