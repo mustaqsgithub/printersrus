@@ -259,8 +259,8 @@ test.describe("Checkout", () => {
     // Fill shipping details so the Stripe payment section appears
     await fillShippingForm(page);
     await expect(page.locator('h2:has-text("Payment")')).toBeVisible();
-    // Payment section renders either the Stripe iframe or a loading/error state
-    await expect(page.locator('iframe[name^="__privateStripeFrame"], text=/Loading payment form|Failed to initialise/i').first()).toBeVisible({ timeout: 10_000 });
+    // The "complete details" prompt should be replaced by payment content (loading, iframe, or error)
+    await expect(page.locator('text=/Please complete your contact and shipping details before paying/i')).toBeHidden({ timeout: 10_000 });
   });
 });
 
@@ -286,9 +286,9 @@ test.describe("Full checkout flow", () => {
     await expect(page.locator("#firstName")).toBeVisible({ timeout: 10_000 });
     await fillShippingForm(page);
 
-    // 4. Payment section should appear (Stripe iframe or loading/error state)
+    // 4. Payment section should appear (the "complete details" prompt is gone)
     await expect(page.locator('h2:has-text("Payment")')).toBeVisible();
-    await expect(page.locator('iframe[name^="__privateStripeFrame"], text=/Loading payment form|Failed to initialise/i').first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('text=/Please complete your contact and shipping details before paying/i')).toBeHidden({ timeout: 10_000 });
   });
 });
 
