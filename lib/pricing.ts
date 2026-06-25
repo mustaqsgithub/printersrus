@@ -1,4 +1,5 @@
 import { dbHelpers, initDatabase } from "@/lib/database";
+import { FREE_SHIPPING_THRESHOLD, SHIPPING_FLAT_RATE } from "@/lib/shipping";
 
 export interface CartItemInput {
   productId: string;
@@ -56,7 +57,7 @@ export async function priceCart(items: CartItemInput[]): Promise<PricedCart> {
     });
   }
 
-  const shippingAmount = subtotal > 50 ? 0 : 8.99;
+  const shippingAmount = subtotal > FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FLAT_RATE;
   const taxAmount = round2(subtotal * 0.08);
   const totalAmount = round2(subtotal + shippingAmount + taxAmount);
 

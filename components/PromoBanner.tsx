@@ -32,7 +32,7 @@ export function PromoBanner() {
           </h1>
 
           <p className="text-base sm:text-lg text-gray-300 mb-8 max-w-xl text-balance">
-            Top brands, fair prices, and free UK shipping on orders over £50.
+            Top brands, fair prices, and free UK shipping on orders over £250.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3">

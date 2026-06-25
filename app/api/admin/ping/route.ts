@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { getSessionToken } from "@/lib/auth-cookies";
+import { isStaffRole } from "@/lib/roles";
 
 export async function GET() {
   const token = await getSessionToken();
@@ -9,7 +10,7 @@ export async function GET() {
   }
 
   const user = await getSessionUser(token);
-  if (!user || user.role !== "admin") {
+  if (!user || !isStaffRole(user.role)) {
     return NextResponse.json({ message: "Forbidden." }, { status: 403 });
   }
 

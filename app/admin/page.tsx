@@ -8,20 +8,26 @@ import { AdminProducts } from "@/components/AdminProducts";
 import { AdminCategories } from "@/components/AdminCategories";
 import { AdminOrders } from "@/components/AdminOrders";
 import { AdminUsers } from "@/components/AdminUsers";
+import { isStaffRole, isSuperAdminRole } from "@/lib/roles";
 
-type TabKey = "products" | "categories" | "orders" | "users";
+type TabKey = "products" | "categories" | "orders" | "staff";
 
 export default function AdminPage() {
   const { user, isLoading, loadUser, signOut } = useAuthStore();
   const [canAccess, setCanAccess] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("products");
 
+  const isSuperAdmin = isSuperAdminRole(user?.role);
+  const tabs: TabKey[] = isSuperAdmin
+    ? ["products", "categories", "orders", "staff"]
+    : ["products", "categories", "orders"];
+
   useEffect(() => {
     loadUser();
   }, [loadUser]);
 
   useEffect(() => {
-    setCanAccess(Boolean(user && user.role === "admin"));
+    setCanAccess(isStaffRole(user?.role));
   }, [user]);
 
   if (isLoading && !user) {
@@ -70,16 +76,24 @@ export default function AdminPage() {
             <Shield size={28} className="text-primary-600" />
             <h1 className="text-3xl font-bold text-gray-900">Admin Console</h1>
           </div>
-          <button
-            onClick={() => signOut()}
-            className="px-4 py-2 rounded-md bg-gray-900 text-white font-semibold hover:bg-gray-800"
-          >
-            Sign out
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/"
+              className="px-4 py-2 rounded-md bg-white text-gray-700 border border-gray-200 font-semibold hover:border-gray-300"
+            >
+              View store
+            </Link>
+            <button
+              onClick={() => signOut()}
+              className="px-4 py-2 rounded-md bg-gray-900 text-white font-semibold hover:bg-gray-800"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2 mb-6">
-          {(["products", "categories", "orders", "users"] as TabKey[]).map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -98,7 +112,7 @@ export default function AdminPage() {
           {activeTab === "products" && <AdminProducts />}
           {activeTab === "categories" && <AdminCategories />}
           {activeTab === "orders" && <AdminOrders />}
-          {activeTab === "users" && <AdminUsers />}
+          {activeTab === "staff" && isSuperAdmin && <AdminUsers />}
         </div>
       </div>
     </div>

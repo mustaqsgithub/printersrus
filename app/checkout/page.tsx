@@ -8,22 +8,19 @@ import { ArrowLeft, Lock } from "lucide-react";
 import { useCartStore } from "@/lib/cart-store";
 import { useAuthStore } from "@/lib/auth-store";
 import StripePaymentForm from "@/components/StripePaymentForm";
-import PaypalCheckoutButton from "@/components/PaypalCheckoutButton";
-
-type PaymentTab = "stripe" | "paypal";
+import { FREE_SHIPPING_THRESHOLD, SHIPPING_FLAT_RATE } from "@/lib/shipping";
 
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, getTotalPrice, clearCart } = useCartStore();
   const { user, loadUser } = useAuthStore();
 
-  const [paymentTab, setPaymentTab] = useState<PaymentTab>("stripe");
   const [submitting, setSubmitting] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [savePaymentMethod, setSavePaymentMethod] = useState(false);
 
   const totalPrice = getTotalPrice();
-  const shippingCost = totalPrice > 50 ? 0 : 8.99;
+  const shippingCost = totalPrice > FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FLAT_RATE;
   const tax = totalPrice * 0.08;
   const grandTotal = totalPrice + shippingCost + tax;
 
@@ -117,11 +114,7 @@ export default function CheckoutPage() {
     };
   };
 
-  const finalizeOrder = async (payment: {
-    provider: PaymentTab;
-    paymentIntentId?: string;
-    paypalOrderId?: string;
-  }) => {
+  const finalizeOrder = async (payment: { paymentIntentId: string }) => {
     const { shippingAddress, billingAddress } = buildAddresses();
     const res = await fetch("/api/checkout", {
       method: "POST",
@@ -136,7 +129,7 @@ export default function CheckoutPage() {
         shippingAddress,
         billingAddress,
         items: cartPayload,
-        payment,
+        payment: { provider: "stripe", ...payment },
       }),
     });
 
@@ -262,22 +255,13 @@ export default function CheckoutPage() {
                   </div>
                 )}
 
-                <div className="flex gap-2 mb-6 border-b border-gray-200">
-                  <TabButton active={paymentTab === "stripe"} onClick={() => setPaymentTab("stripe")}>
-                    Card
-                  </TabButton>
-                  <TabButton active={paymentTab === "paypal"} onClick={() => setPaymentTab("paypal")}>
-                    PayPal
-                  </TabButton>
-                </div>
-
                 {globalError && (
                   <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
                     {globalError}
                   </div>
                 )}
 
-                {paymentTab === "stripe" && requiredAddressFilled && (
+                {requiredAddressFilled && (
                   <>
                     {user && (
                       <label className="flex items-center gap-2 text-sm text-gray-900 mb-4">
@@ -297,24 +281,11 @@ export default function CheckoutPage() {
                       buttonLabel={`Pay £${grandTotal.toFixed(2)}`}
                       onSuccess={async (paymentIntentId) => {
                         setGlobalError(null);
-                        await finalizeOrder({ provider: "stripe", paymentIntentId });
+                        await finalizeOrder({ paymentIntentId });
                       }}
                       onError={(msg) => setGlobalError(msg)}
                     />
                   </>
-                )}
-
-                {paymentTab === "paypal" && requiredAddressFilled && (
-                  <PaypalCheckoutButton
-                    items={cartPayload}
-                    disabled={submitting}
-                    onApproved={async (paypalOrderId) => {
-                      setSubmitting(true);
-                      setGlobalError(null);
-                      await finalizeOrder({ provider: "paypal", paypalOrderId });
-                    }}
-                    onError={(msg) => setGlobalError(msg)}
-                  />
                 )}
               </div>
             </div>
@@ -419,29 +390,5 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
       <span className="text-gray-900">{label}</span>
       <span className="font-semibold text-gray-900">{value}</span>
     </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`px-4 py-2 -mb-px border-b-2 font-medium transition ${
-        active
-          ? "border-primary-600 text-primary-700"
-          : "border-transparent text-gray-600 hover:text-gray-900"
-      }`}
-    >
-      {children}
-    </button>
   );
 }

@@ -4,6 +4,7 @@ import {
   createAdminUser,
   getUserByEmail,
   isAdminRegistered,
+  resolveOwnerRole,
   updateUserPasswordAndRole,
 } from "@/lib/auth";
 
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
       const updated = await updateUserPasswordAndRole({
         email,
         password,
-        role: "admin",
+        role: resolveOwnerRole(email),
         verifyEmail: true,
       });
       return NextResponse.json({ user: updated, updated: true });
@@ -62,6 +63,7 @@ export async function POST(request: NextRequest) {
       email,
       phone,
       password,
+      role: resolveOwnerRole(email),
     });
 
     return NextResponse.json({ user: admin, created: true });

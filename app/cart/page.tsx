@@ -4,13 +4,14 @@ import Link from "next/link";
 import Image from "next/image";
 import { Trash2, ShoppingBag, ArrowLeft } from "lucide-react";
 import { useCartStore } from "@/lib/cart-store";
+import { FREE_SHIPPING_THRESHOLD, SHIPPING_FLAT_RATE } from "@/lib/shipping";
 
 export default function CartPage() {
   const { items, updateQuantity, removeItem, getTotalPrice, getTotalItems } = useCartStore();
 
   const totalItems = getTotalItems();
   const totalPrice = getTotalPrice();
-  const shippingCost = totalPrice > 50 ? 0 : 8.99;
+  const shippingCost = totalPrice > FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FLAT_RATE;
   const tax = totalPrice * 0.08; // 8% tax
   const grandTotal = totalPrice + shippingCost + tax;
 
@@ -148,9 +149,9 @@ export default function CartPage() {
                   )}
                 </span>
               </div>
-              {totalPrice < 50 && totalPrice > 0 && (
+              {totalPrice < FREE_SHIPPING_THRESHOLD && totalPrice > 0 && (
                 <p className="text-sm text-gray-900">
-                  Add £{(50 - totalPrice).toFixed(2)} more for free shipping!
+                  Add £{(FREE_SHIPPING_THRESHOLD - totalPrice).toFixed(2)} more for free shipping!
                 </p>
               )}
               <div className="flex justify-between">

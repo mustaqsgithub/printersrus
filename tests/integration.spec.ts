@@ -447,20 +447,24 @@ test.describe("Checkout & orders", () => {
     expect(order.orderNumber).toMatch(/^PR-/);
   });
 
+  test("checkout calculates correct totals (free shipping over £250)", async ({
   test.skip("checkout calculates correct totals (free shipping over £50) (requires Stripe integration)", async ({
     request,
   }) => {
     const listRes = await request.get("/api/products");
     const products = (await listRes.json()).products;
 
-    // Find a product that costs more than £50 so shipping is free
-    const expensive = products.find(
-      (p: any) => (p.salePrice || p.price) > 50
-    );
-    if (!expensive) {
+    // Pick the priciest product and order enough of it to clear the £250
+    // free-shipping threshold.
+    const priciest = [...products].sort(
+      (a: any, b: any) => (b.salePrice || b.price) - (a.salePrice || a.price)
+    )[0];
+    if (!priciest) {
       test.skip();
       return;
     }
+    const unitPrice = priciest.salePrice || priciest.price;
+    const quantity = Math.ceil(251 / unitPrice);
 
     const checkoutRes = await request.post("/api/checkout", {
       data: {
@@ -475,7 +479,7 @@ test.describe("Checkout & orders", () => {
           postcode: "M1 1AA",
           country: "United Kingdom",
         },
-        items: [{ productId: expensive.id, quantity: 1 }],
+        items: [{ productId: priciest.id, quantity }],
       },
     });
     expect(checkoutRes.ok()).toBeTruthy();
