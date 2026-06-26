@@ -21,7 +21,7 @@ const mockCategories = [
   },
   {
     id: '3',
-    name: 'Accessories',
+    name: 'Computer Hardware',
     slug: 'accessories',
     description: 'Essential printer accessories and supplies',
     image: '',

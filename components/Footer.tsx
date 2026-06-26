@@ -78,7 +78,7 @@ export function Footer() {
                 <li><Link href="/products" className="hover:text-primary-700 transition">All Products</Link></li>
                 <li><Link href="/products?category=printers" className="hover:text-primary-700 transition">Printers</Link></li>
                 <li><Link href="/products?category=ink-toner" className="hover:text-primary-700 transition">Ink & Toner</Link></li>
-                <li><Link href="/products?category=accessories" className="hover:text-primary-700 transition">Accessories</Link></li>
+                <li><Link href="/products?category=accessories" className="hover:text-primary-700 transition">Computer Hardware</Link></li>
                 <li>
                   <Link
                     href="/products?sale=true"
