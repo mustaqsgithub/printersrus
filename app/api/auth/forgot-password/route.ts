@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
 
   await sendPasswordResetEmail({
     recipientEmail: user.email,
-    recipientName: user.firstName,
+    recipientName: user.first_name,
     resetUrl,
   });
 
