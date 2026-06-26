@@ -187,7 +187,7 @@ export function CommandPalette() {
       { type: "nav", id: "sale", label: "Sale Items", description: "View discounted products", href: "/products?sale=true", icon: Tag, group: "Navigate", keywords: "deals discount offers" },
       { type: "nav", id: "cat-printers", label: "Printers", description: "Inkjet, Laser, & All-in-One", href: "/products?category=printers", icon: Printer, group: "Categories" },
       { type: "nav", id: "cat-ink", label: "Ink & Toner", description: "Original & compatible", href: "/products?category=ink-toner", icon: Droplet, group: "Categories" },
-      { type: "nav", id: "cat-acc", label: "Accessories", description: "Cables, paper & more", href: "/products?category=accessories", icon: Cable, group: "Categories" },
+      { type: "nav", id: "cat-acc", label: "Computer Hardware", description: "Cables, paper & more", href: "/products?category=accessories", icon: Cable, group: "Categories" },
       { type: "nav", id: "cart", label: "Cart", description: "Review your items", href: "/cart", icon: ShoppingCart, group: "Account" },
     ];
     if (user) {

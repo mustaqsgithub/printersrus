@@ -15,7 +15,7 @@ const categories = [
     description: "Original & Compatible",
   },
   {
-    name: "Accessories",
+    name: "Computer Hardware",
     slug: "accessories",
     icon: Cable,
     description: "Cables, Paper, & More",

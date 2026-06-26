@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createPasswordResetToken, getUserByEmail } from "@/lib/auth";
+import { sendPasswordResetEmail } from "@/lib/email";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
@@ -9,10 +10,18 @@ export async function POST(request: NextRequest) {
 
   const user = await getUserByEmail(body.email);
   if (!user) {
+    // Don't reveal whether the email exists
     return NextResponse.json({ ok: true });
   }
 
   const reset = await createPasswordResetToken(user.id);
   const resetUrl = `${request.nextUrl.origin}/reset-password?token=${reset.token}`;
-  return NextResponse.json({ ok: true, resetUrl });
+
+  await sendPasswordResetEmail({
+    recipientEmail: user.email,
+    recipientName: user.firstName,
+    resetUrl,
+  });
+
+  return NextResponse.json({ ok: true });
 }

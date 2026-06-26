@@ -183,7 +183,7 @@ export function Header() {
               { href: "/products", label: "All Products" },
               { href: "/products?category=printers", label: "Printers" },
               { href: "/products?category=ink-toner", label: "Ink & Toner" },
-              { href: "/products?category=accessories", label: "Accessories" },
+              { href: "/products?category=accessories", label: "Computer Hardware" },
             ].map((item) => (
               <li key={item.href}>
                 <Link

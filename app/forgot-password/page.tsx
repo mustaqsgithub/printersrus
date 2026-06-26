@@ -9,14 +9,12 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
-  const [resetUrl, setResetUrl] = useState<string | null>(null);
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus("idle");
     setMessage("");
-    setResetUrl(null);
 
     try {
       const response = await fetch("/api/auth/forgot-password", {
@@ -29,8 +27,7 @@ export default function ForgotPasswordPage() {
         throw new Error(data?.message || "Unable to request reset link.");
       }
       setStatus("success");
-      setMessage("If that email exists, a reset link will be sent shortly.");
-      setResetUrl(data?.resetUrl || null);
+      setMessage("If that email exists, a reset link has been sent. Please check your inbox.");
       toast({
         title: "Reset link sent",
         message: "If the email exists, it will receive a reset link.",
@@ -67,13 +64,6 @@ export default function ForgotPasswordPage() {
             }`}
           >
             {message}
-            {resetUrl && (
-              <div className="mt-2">
-                <Link href={resetUrl} className="text-primary-600 hover:text-primary-700 font-medium">
-                  Use reset link
-                </Link>
-              </div>
-            )}
           </div>
         )}
 
