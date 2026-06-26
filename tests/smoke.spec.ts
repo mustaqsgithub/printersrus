@@ -188,24 +188,37 @@ test.describe("Auth pages", () => {
     await expect(page.getByRole("button", { name: "Create Account" })).toBeVisible();
   });
 
-  test("signup rejects mismatched passwords", async ({ page }) => {
+  test("signup rejects mismatched passwords", async ({ page, browserName }) => {
     await page.goto("/signup");
 
     await page.locator("#firstName").fill("Test");
     await page.locator("#lastName").fill("User");
     await page.locator("#email").fill(uniqueEmail());
-    await page.locator("#password").fill("Password123!");
-    await page.locator("#confirmPassword").fill("Mismatch!");
+    // WebKit doesn't reliably fire React onChange on password inputs via .fill();
+    // use pressSequentially to simulate real keystrokes instead.
+    if (browserName === "webkit") {
+      await page.locator("#password").pressSequentially("Password123!");
+      await page.locator("#confirmPassword").pressSequentially("Mismatch!");
+    } else {
+      await page.locator("#password").fill("Password123!");
+      await page.locator("#confirmPassword").fill("Mismatch!");
+    }
     await page.getByRole("button", { name: "Create Account" }).click();
 
     await expect(page.locator("text=/[Pp]asswords do not match/")).toBeVisible({ timeout: 10_000 });
   });
 
-  test("login with invalid credentials shows error", async ({ page }) => {
+  test("login with invalid credentials shows error", async ({ page, browserName }) => {
     await page.goto("/login");
 
     await page.locator("#email").fill("nonexistent@test.com");
-    await page.locator("#password").fill("wrongpassword");
+    // WebKit doesn't reliably fire React onChange on password inputs via .fill();
+    // use pressSequentially to simulate real keystrokes instead.
+    if (browserName === "webkit") {
+      await page.locator("#password").pressSequentially("wrongpassword");
+    } else {
+      await page.locator("#password").fill("wrongpassword");
+    }
     await page.getByRole("button", { name: "Sign In" }).click();
 
     // Should show an error message (exact text may vary)
